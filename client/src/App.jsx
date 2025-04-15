@@ -1,25 +1,37 @@
-import { useState } from 'react'
+import { useState } from 'react';
 
 export default function App() {
-const [name, setName] = useState('')
-const [email, setEmail] = useState('')
-const [response, setResponse] = useState('')
+  const [nama, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [response, setResponse] = useState(null);
 
-const handleSubmit = async (e) => {
-  e.preventDefault()
-
-  try {
-    const res = await fetch('http://localhost:3000/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nama: name, email }),
-    })
-    const data = await res.json()
-    setResponse(`Sukses: ${JSON.stringify(data)}`)    
-  } catch (err) {
-    setResponse('Gagal menghubungi server.')
-  }
-}
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+  
+    console.log('Submitting:', { nama, email }); // Log the data being sent
+  
+    try {
+      const res = await fetch('http://localhost:4000/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ nama, email }),
+      });
+  
+      if (!res.ok) {
+        throw new Error('Failed to add user');
+      }
+  
+      const data = await res.json();
+      setResponse(data.message);
+      setName('');
+      setEmail('');
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      setResponse('Error adding user jsx');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-800 to-purple-900 text-white flex items-center justify-center">
@@ -31,7 +43,7 @@ const handleSubmit = async (e) => {
             <input
               type="text"
               className="w-full px-4 py-2 rounded border border-gray-300"
-              value={name}
+              value={nama}
               onChange={(e) => setName(e.target.value)}
               required
             />
@@ -61,5 +73,5 @@ const handleSubmit = async (e) => {
         )}
       </div>
     </div>
-  )
+  );
 }

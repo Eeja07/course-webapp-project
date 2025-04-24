@@ -2,10 +2,12 @@ import Header from './header'
 import Sidebar from './sidebar'
 import { Pencil, Save, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
+import axios from 'axios'
 
 function Profile() {
   const fileInputRef = useRef(null)
   const [editMode, setEditMode] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
 
   const [profile, setProfile] = useState({
     nama: '',
@@ -24,17 +26,10 @@ function Profile() {
     }))
   }
 
-  const toggleEdit = () => {
-    if (editMode) {
-      console.log('Saved profile:', profile)
-      // TODO: Simpan ke backend
-    }
-    setEditMode(!editMode)
-  }
-
   const handlePhotoChange = (e) => {
     const file = e.target.files[0]
     if (file) {
+      setSelectedFile(file) // simpan file untuk dikirim ke backend
       const reader = new FileReader()
       reader.onloadend = () => {
         setProfile((prev) => ({
@@ -44,6 +39,37 @@ function Profile() {
       }
       reader.readAsDataURL(file)
     }
+  }
+
+  const toggleEdit = async () => {
+    if (editMode) {
+      // ⬇️ Kirim ke backend saat tombol SAVE diklik
+      try {
+        const formData = new FormData()
+        formData.append('nama', profile.nama)
+        formData.append('nip', profile.nip)
+        formData.append('email', profile.email)
+        formData.append('fakultas', profile.fakultas)
+        formData.append('prodi', profile.prodi)
+        if (selectedFile) {
+          formData.append('photo', selectedFile) // kirim file asli
+        }
+
+        const res = await axios.put('http://localhost:3000/profile/update', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+
+        console.log('✅ Profil berhasil diperbarui:', res.data)
+        alert('Profil berhasil disimpan!')
+      } catch (error) {
+        console.error('❌ Gagal menyimpan profil:', error)
+        alert('Gagal menyimpan. Cek koneksi atau server.')
+      }
+    }
+
+    setEditMode(!editMode)
   }
 
   return (
@@ -84,41 +110,11 @@ function Profile() {
 
           {/* INFORMASI */}
           <div className="flex flex-col gap-4 w-full max-w-xl">
-            <ProfileRow
-              label="Nama"
-              name="nama"
-              value={profile.nama}
-              onChange={handleChange}
-              editMode={editMode}
-            />
-            <ProfileRow
-              label="NIP"
-              name="nip"
-              value={profile.nip}
-              onChange={handleChange}
-              editMode={editMode}
-            />
-            <ProfileRow
-              label="Email"
-              name="email"
-              value={profile.email}
-              onChange={handleChange}
-              editMode={editMode}
-            />
-            <ProfileRow
-              label="Fakultas"
-              name="fakultas"
-              value={profile.fakultas}
-              onChange={handleChange}
-              editMode={editMode}
-            />
-            <ProfileRow
-              label="Program Studi"
-              name="prodi"
-              value={profile.prodi}
-              onChange={handleChange}
-              editMode={editMode}
-            />
+            <ProfileRow label="Nama" name="nama" value={profile.nama} onChange={handleChange} editMode={editMode} />
+            <ProfileRow label="NIP" name="nip" value={profile.nip} onChange={handleChange} editMode={editMode} />
+            <ProfileRow label="Email" name="email" value={profile.email} onChange={handleChange} editMode={editMode} />
+            <ProfileRow label="Fakultas" name="fakultas" value={profile.fakultas} onChange={handleChange} editMode={editMode} />
+            <ProfileRow label="Program Studi" name="prodi" value={profile.prodi} onChange={handleChange} editMode={editMode} />
 
             <button
               className="mt-6 flex items-center gap-2 text-red-600 hover:underline font-semibold"

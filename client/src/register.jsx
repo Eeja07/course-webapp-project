@@ -1,12 +1,36 @@
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import axios from 'axios'
 
 function Register() {
   const navigate = useNavigate()
 
-  const handleSubmit = (e) => {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  })
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    navigate('/enter') 
+
+    try {
+      const response = await axios.post('http://localhost:4000/', formData)
+
+      console.log('Server response:', response.data)
+      navigate('/enter')
+    } catch (error) {
+      console.error('Gagal register:', error)
+      alert('Registrasi gagal. Cek console atau API Anda.')
+    }
   }
 
   return (
@@ -26,12 +50,20 @@ function Register() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 items-center">
           <input
             type="email"
+            name="email"
             placeholder="EMAIL"
+            value={formData.email}
+            onChange={handleChange}
+            required
             className="px-4 py-2 w-64 rounded-full text-center bg-red-300 placeholder-white text-white"
           />
           <input
             type="password"
+            name="password"
             placeholder="PASSWORD"
+            value={formData.password}
+            onChange={handleChange}
+            required
             className="px-4 py-2 w-64 rounded-full text-center bg-red-300 placeholder-white text-white"
           />
           <button

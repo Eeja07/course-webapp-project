@@ -21,10 +21,11 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-
+  
     try {
-      const response = await axios.post('http://localhost:4000/', formData)
-
+      const response = await axios.post('/api/register', formData)
+      // ^ Added a leading slash here
+  
       console.log('Server response:', response.data)
       navigate('/enter')
     } catch (error) {

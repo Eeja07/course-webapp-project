@@ -21,24 +21,31 @@ function Enter() {
   }
 
   const handleNext = async (e) => {
-    e.preventDefault()
-
+    e.preventDefault();
+  
     if (step === 'email') {
-      setStep('password')
+      setStep('password');
     } else {
-      // Kirim data ke backend saat di step password
+      // Send data to the backend at /api/login
       try {
-        const response = await axios.post('http://localhost:3000/login', formData)
-        console.log('Login berhasil:', response.data)
-
-        // TODO: Simpan token jika ada → localStorage.setItem("token", ...)
-        navigate('/dashboard')
+        const response = await axios.post('/api/login', formData); // Proxy sends this to localhost:4000/api/login
+        console.log('Login successful:', response.data);
+  
+        // Save token to localStorage if it exists
+        if (response.data.token) {
+          localStorage.setItem('token', response.data.token);
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+  
+        // Navigate to the dashboard
+        navigate('/dashboard');
       } catch (error) {
-        console.error('Login gagal:', error)
-        alert('Email atau password salah!')
+        console.error('Login failed:', error);
+        alert('Email or password is incorrect!');
       }
     }
-  }
+  };
+  
 
   const handleReturn = () => {
     if (step === 'password') {

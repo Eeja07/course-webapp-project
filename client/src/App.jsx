@@ -3,6 +3,7 @@ import Login from "./welcome";
 import Register from './register'
 import Enter from './login'
 import Dashboard from './dashboard'
+import Profile from './profile'
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/enter" element={<Enter />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/profile" element={<Profile />} />
     </Routes>
   );
 }

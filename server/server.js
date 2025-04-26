@@ -11,26 +11,22 @@ require('dotenv').config(); // To load environment variables from .env file
 // Initialize the Express app
 const app = express();
 
-// Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // Replace with your client URL
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.json());
 
-// Define uploads directory and ensure it exists
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log('Uploads directory created: ${uploadsDir}');
+  console.log(`Uploads directory created: ${uploadsDir}`);
 }
 
-app.use('/uploads', express.static(uploadsDir, {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.jpg') || path.endsWith('.jpeg'))  {
-      res.setHeader('Content-Type', 'image/jpeg');
-    } else if (path.endsWith('.png')) {
-      res.setHeader('Content-Type', 'image/png');
-    }
-  }
-}));
+// Membuat folder 'uploads' dapat diakses secara publik
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Add debugging to check middleware setup
 console.log(`Serving static files from: ${uploadsDir}`);
 console.log(`Files will be accessible at: http://localhost:4000/uploads/filename.jpg`);
@@ -42,6 +38,7 @@ const pool = new Pool({
   password: '1',
   port: 5432,
 });
+// Add this function after your other imports and setup
 
 // Test database connection
 pool.query('SELECT NOW()', (err, res) => {
@@ -51,29 +48,88 @@ pool.query('SELECT NOW()', (err, res) => {
     console.log('Database connected:', res.rows);
   }
 });
+// Function to clean up unused files in uploads directory
+const cleanupUnusedUploads = async () => {
+  try {
+    // Get all profile_photo values from the database
+    const dbResult = await pool.query('SELECT profile_photo FROM dosen WHERE profile_photo IS NOT NULL');
 
+    // Create a set of filenames that are in the database
+    const databaseFiles = new Set();
+    dbResult.rows.forEach(row => {
+      if (row.profile_photo) {
+        databaseFiles.add(row.profile_photo);
+      }
+    });
+
+    console.log(`Found ${databaseFiles.size} profile photos in database`);
+
+    // Read all files from uploads directory
+    fs.readdir(uploadsDir, (err, files) => {
+      if (err) {
+        console.error('Error reading uploads directory:', err);
+        return;
+      }
+
+      // Loop through each file in the directory
+      files.forEach(file => {
+        // If the file is not in the database, delete it
+        if (!databaseFiles.has(file)) {
+          const filePath = path.join(uploadsDir, file);
+
+          // Skip default profile picture if it exists
+          if (file === '/profile.jpg') return;
+
+          // Delete the file
+          fs.unlink(filePath, (err) => {
+            if (err) {
+              console.error(`Error deleting file ${file}:`, err);
+            } else {
+              console.log(`Deleted unused file: ${file}`);
+            }
+          });
+        }
+      });
+    });
+
+    console.log('Cleanup complete');
+  } catch (error) {
+    console.error('Error during uploads cleanup:', error);
+  }
+};
+
+// Upload gambar ke server
 const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    cb(null, uploadsDir); // Use the same uploadsDir variable
+  destination: (req, file, cb) => {
+    cb(null, './uploads');
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname)); // Save with unique name
-  }
+    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+  },
 });
 
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
-  fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|gif/; // Allowed file types
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+const upload = multer({ storage: storage });
+// Add this after your other setups
 
-    if (mimetype && extname) {
-      return cb(null, true);
-    }
-    cb(new Error('Invalid file type. Only JPEG, PNG, and GIF are allowed.'));
+// Run cleanup every 24 hours
+setInterval(cleanupUnusedUploads, 24 * 60 * 60 * 1000);
+
+// Also run once when the server starts
+cleanupUnusedUploads();
+// Endpoint untuk meng-upload foto profil
+app.post('/upload-profile-picture', upload.single('profile_picture'), async (req, res) => {
+  const { userId } = req.body;
+  const filePath = `/uploads/${req.file.filename}`;
+
+  try {
+    await client.query(
+      'UPDATE users SET profile_picture = $1 WHERE id = $2',
+      [filePath, userId]
+    );
+    res.status(200).send('Profile picture updated successfully');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error updating profile picture');
   }
 });
 
@@ -97,25 +153,58 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
-
 app.get('/api/profile', authenticateToken, async (req, res) => {
   try {
+    // Add detailed logging
+    console.log('Received user ID from token:', req.user.id);
+    console.log('Received user email from token:', req.user.email);
+
     const query = 'SELECT id, nama, nip, email, fakultas, program_studi, profile_photo FROM dosen WHERE id = $1';
+
+    // Log the actual query being executed
+    console.log('Executing query with ID:', req.user.id);
+
     const result = await pool.query(query, [req.user.id]);
 
-    // Check if no user is found, but return an empty profile object or a default response
+    // Log the query result
+    console.log('Query result rows:', result.rows);
+    console.log('Number of rows found:', result.rows.length);
+
+    let user;
+
     if (result.rows.length === 0) {
-      return res.status(200).json({ user: {} });  // Returning an empty object when no user is found
+      // Return a default user object with placeholder values if no user is found
+      user = {
+        nama: '',
+        nip: '',
+        email: req.user.email || '',
+        fakultas: '',
+        program_studi: '',
+        profile_photo: '../profile.jpg'
+      };
+
+      console.log('No profile found. Returning default user object');
+    } else {
+      user = result.rows[0];
+
+      // Check if the user has a profile photo
+      if (user.profile_photo) {
+        user.profile_photo = `/uploads/${user.profile_photo}`; // Serve the image from the uploads directory
+      } else {
+        user.profile_photo = '../profile.jpg'; // Default image if no profile photo exists
+      }
+
+      console.log('Profile found:', user);
     }
-    const user = result.rows[0];
-    if (user.profile_photo) {
-      user.profile_photo = path.join('/uploads', user.profile_photo); // Serve the image from the uploads directory
-    }
-    // Log the user data for debugging
-    res.status(200).json({ user: result.rows[0] });
+
+    res.status(200).json({ user });
   } catch (error) {
-    console.error('Error fetching profile backend:', error);
-    res.status(500).json({ message: 'Failed to fetch profile' });
+    console.error('Detailed error fetching profile:', error);
+    res.status(500).json({
+      message: 'Failed to fetch profile',
+      errorDetails: error.message,
+      stack: error.stack
+    });
   }
 });
 
@@ -139,11 +228,13 @@ app.post('/api/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Insert new user with hashed password
+    // In registration route
     const result = await pool.query(
-      'INSERT INTO login (email, password) VALUES ($1, $2) RETURNING *',
+      'INSERT INTO login (email, password) VALUES ($1, $2) RETURNING id',
       [email, hashedPassword]
     );
+    const userId = result.rows[0].id; // This is now a UUID
+
 
     res.status(201).json({
       message: 'Registration successful',
@@ -205,7 +296,7 @@ app.get('/api/test-uploads', (req, res) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    
+
     const fileInfo = files.map(file => {
       const filePath = path.join(uploadsDir, file);
       try {
@@ -224,7 +315,7 @@ app.get('/api/test-uploads', (req, res) => {
         };
       }
     });
-    
+
     res.json({
       uploadsDir,
       fileCount: files.length,
@@ -233,13 +324,13 @@ app.get('/api/test-uploads', (req, res) => {
   });
 });
 
-
 app.post('/api/profile/update', authenticateToken, upload.single('profile_photo'), async (req, res) => {
   const { nama, nip, email, fakultas, program_studi } = req.body;
-  
+  const userId = req.user.id; // Extract user ID for clarity
+
   // Store just the filename instead of the full path
   const photoFilename = req.file ? req.file.filename : null;
-  
+
   // Input validation
   if (!nama || !nip || !email || !fakultas || !program_studi) {
     return res.status(400).json({ message: 'All fields are required' });
@@ -248,41 +339,38 @@ app.post('/api/profile/update', authenticateToken, upload.single('profile_photo'
   try {
     // Check if user exists in dosen table
     const checkQuery = 'SELECT * FROM dosen WHERE id = $1';
-    const checkResult = await pool.query(checkQuery, [req.user.id]);
-    console.log('User exists check:', checkResult.rows.length > 0, 'User ID:', req.user.id);
-    
-    let result;
-    
-    if (checkResult.rows.length === 0) {
-      // User doesn't exist - INSERT a new record
-      const insertQuery = `INSERT INTO dosen (id, nama, nip, email, fakultas, program_studi, profile_photo) 
-                          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`;
-      
-      result = await pool.query(insertQuery, [req.user.id, nama, nip, email, fakultas, program_studi, photoFilename]);
-      console.log('Created new user profile');
-    } else {
-      // User exists - UPDATE existing record
-      const updateQuery = `UPDATE dosen SET nama = $1, nip = $2, email = $3, fakultas = $4, program_studi = $5, 
-                         profile_photo = COALESCE($6, profile_photo) WHERE id = $7 RETURNING *`;
-      
-      result = await pool.query(updateQuery, [nama, nip, email, fakultas, program_studi, photoFilename, req.user.id]);
-      console.log('Updated existing user profile');
-    }
+    const checkResult = await pool.query(checkQuery, [userId]);
 
-    if (result.rows.length > 0) {
-      res.status(200).json({
-        message: 'Profile updated successfully',
-        user: result.rows[0],
-      });
-    } else {
-      console.log(`Operation completed but no rows returned for user ID ${req.user.id}`);
-      res.status(500).json({ message: 'Profile operation completed but no data returned' });
+    let result;
+    if (checkResult.rows.length === 0) {
+      // Insert new user if not found
+      const insertQuery = `
+        INSERT INTO dosen (id, nama, nip, email, fakultas, program_studi, profile_photo)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `;
+      result = await pool.query(insertQuery, [userId, nama, nip, email, fakultas, program_studi, photoFilename]);
     }
+    else {
+      // Update existing user
+      const updateQuery = `
+        UPDATE dosen
+        SET id = $1, nama = $2, nip = $3, email = $4, fakultas = $5, program_studi = $6, profile_photo = $7, updated_at = NOW()
+        WHERE id = $8 RETURNING *`;
+
+      result = await pool.query(updateQuery, [userId, nama, nip, email, fakultas, program_studi, photoFilename, userId]);
+    }
+    
+    res.status(200).json({
+      message: 'Profile updated successfully',
+      user: result.rows[0],
+    });
   } catch (error) {
     console.error('Error updating profile:', error);
     res.status(500).json({ message: 'Failed to update profile', error: error.message });
   }
 });
+
 
 // Start the server
 const PORT = process.env.PORT || 4000;

@@ -18,6 +18,7 @@ const ProfilePage = () => {
   });
   const [loading, setLoading] = useState(true); // To manage loading state
   const [error, setError] = useState(null); // To manage error state
+
   // Fetch profile data when the component mounts
   useEffect(() => {
     const fetchProfile = async () => {
@@ -56,27 +57,30 @@ const ProfilePage = () => {
       [name]: value,
     }));
   };
+
+  const [previewUrl, setPreviewUrl] = useState(null);
+  
   const handleFileChange = (e) => {
-    if (e.target.files && e.target.files.length[0]) {
-      setSelectedFile(e.target.files[0]); // Set the selected file
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
 
       const reader = new FileReader();
       reader.onloadend = () => {
+        setPreviewUrl(reader.result); // Set the preview URL
       };
-      reader.readAsDataURL(e.target.files[0]); // Read the file as a data URL
+      reader.readAsDataURL(e.target.files[0]);
     }
   };
 
   const toggleEdit = async () => {
     if (editMode) {
       try {
-        const token = localStorage.getItem('token'); // Get JWT token from localStorage
+        const token = localStorage.getItem('token');
         if (!token) {
-          console.error('No token found. User might not be logged in.');
           alert('You need to be logged in to save changes.');
           return;
         }
-
+  
         const formData = new FormData();
         formData.append('nama', profile.nama);
         formData.append('nip', profile.nip);
@@ -84,26 +88,25 @@ const ProfilePage = () => {
         formData.append('fakultas', profile.fakultas);
         formData.append('program_studi', profile.program_studi);
         if (selectedFile) {
-          formData.append('profile_photo', selectedFile); // Append the selected file
-          console.log('Attached file:', selectedFile.name);
+          formData.append('profile_photo', selectedFile);
         }
-
+  
         const res = await axios.post('/api/profile/update', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${token}`,
           },
         });
-        setProfile(res.data.user); // Update profile state with the new data
-        console.log('Profile updated successfully:', res.data);
+  
+        setProfile(res.data.user);
         alert('Profile updated successfully!');
-        setSelectedFile(null); // Reset selected file after upload
+        setSelectedFile(null);
       } catch (error) {
         console.error('Error updating profile:', error.response || error.message || error);
         alert('Failed to update profile. Please try again.');
       }
     }
-    setEditMode(!editMode); // Toggle edit mode
+    setEditMode(!editMode);
   };
   if (loading) {
     return <div>Loading...</div>;
@@ -112,7 +115,6 @@ const ProfilePage = () => {
   if (error) {
     return <div>{error}</div>;
   }
-
   return (
     <div className="bg-gray-100 min-h-screen pl-64 pt-16">
       <Sidebar />
@@ -131,14 +133,12 @@ const ProfilePage = () => {
             title={editMode ? 'Click to change photo' : ''}
           >
             <img
-              src={profile.profile_photo ? '/uploads/${profile.profile_photo}': '/default-avatar.png'}
+              src={previewUrl || `http://localhost:4000${profile.profile_photo}`}
               alt="Lecturer Profile"
               className="w-full h-full object-cover"
               onError={(e) => {
                 console.error('Failed to load image:', e.target.src);
-                // Directly use default image on error
-                e.target.src = '/default-avatar.png';
-                // Prevent infinite error loop
+                e.target.src = '/profile.jpg';
                 e.target.onerror = null;
               }}
             />

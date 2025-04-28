@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 
 function Header({ onToggleSidebar }) {
+  const navigate = useNavigate()
   return (
     <header className="bg-gradient-to-r from-red-700 to-red-500 h-16 pl-4 md:pl-64 pr-4 flex justify-between items-center text-white fixed top-0 left-0 right-0 z-20">
       

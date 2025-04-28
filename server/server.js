@@ -1,12 +1,12 @@
 const express = require('express');
 const cors = require('cors');
+require('dotenv').config(); // To load environment variables from .env file
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-require('dotenv').config(); // To load environment variables from .env file
 
 // Initialize the Express app
 const app = express();
@@ -32,12 +32,13 @@ console.log(`Serving static files from: ${uploadsDir}`);
 console.log(`Files will be accessible at: http://localhost:4000/uploads/filename.jpg`);
 // Configure PostgreSQL connection
 const pool = new Pool({
-  user: 'eeja',
-  host: 'localhost',
-  database: 'basdat',
-  password: '1',
-  port: 5432,
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
 });
+module.exports = pool; // Export the pool for use in other modules
 // Add this function after your other imports and setup
 
 // Test database connection

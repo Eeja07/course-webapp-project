@@ -9,6 +9,7 @@ import HomePage from './home'
 import TaskList from './tasklist'
 import TaskDetail from './taskdetail'
 import StudentList from './studentlist'
+import Grade from "./grade";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
       <Route path="/tasklist" element={<TaskList />} />
       <Route path="/taskdetail" element={<TaskDetail />} />
       <Route path="/studentlist" element={<StudentList />} />
+      <Route path="/grade" element={<Grade />} />
     </Routes>
   );
 }

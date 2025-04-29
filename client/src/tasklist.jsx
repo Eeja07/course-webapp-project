@@ -76,7 +76,7 @@ function TaskList() {
       }}
       className={`px-4 py-2 rounded-md shadow-sm transition ${
         isClickable
-          ? 'bg-white text-gray-600 hover:bg-gray-50 cursor-pointer'
+          ? 'bg-white text-gray-600 hover:bg-gray-100 cursor-pointer'
           : 'bg-white text-gray-400 cursor-not-allowed'
       }`}
     >

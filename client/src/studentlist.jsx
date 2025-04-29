@@ -13,9 +13,7 @@ function StudentList() {
     { name: 'Raditya Rakha Renanda', nrp: '5024221031', due: 'Monday, 14 April 2025' },
     { name: 'Mahija Ibad Pradipta', nrp: '5024221026', due: 'Monday, 14 April 2025' },
     { name: 'Cedric Anthony Edysa', nrp: '5024221015', due: 'Monday, 14 April 2025' },
-    { name: 'Natalia Christin Agustina', nrp: '5024231014', due: 'Monday, 14 April 2025' },
-    { name: 'Cynthia', nrp: '50242310xx', due: 'Monday, 14 April 2025' },
-    { name: 'Cynthia', nrp: '50242310xx', due: 'Monday, 14 April 2025' },
+    { name: 'Natania Christin Agustina', nrp: '5024231014', due: 'Monday, 14 April 2025' },
   ]
 
   const filteredStudents = students.filter((student) =>

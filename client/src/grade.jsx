@@ -1,279 +1,667 @@
-import React, { useState } from "react";
-import { PlusCircle, Pencil, Trash2, Send } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { PlusCircle, Pencil, Trash2, Send, RefreshCw } from "lucide-react";
 import Sidebar from "./sidebar";
 import Header from "./header";
 import axios from 'axios';
 
 const Grade = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [columns, setColumns] = useState([
-    {
-      title: "Penguasaan Materi",
-      aspects: ["Materi Basis Data", "Materi Struktur", "Materi Matematika", "Materi Lainnya"],
-    },
-    {
-      title: "Celah Keamanan",
-      aspects: ["Sanitasi", "Authorization", "Lainnya"],
-    },
-    {
-      title: "Fitur Utama",
-      aspects: ["Create", "Read", "Update", "Delete"],
-    },
-    {
-      title: "Fitur Pendukung",
-      aspects: ["Responsive", "Load Time", "Lainnya"],
-    },
-  ]);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [columns, setColumns] = useState([]);
+    const [scores, setScores] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [newAspectName, setNewAspectName] = useState("");
+    const [currentColIndex, setCurrentColIndex] = useState(null);
+    const [currentAspectIndex, setCurrentAspectIndex] = useState(null);
+    const [invalidFields, setInvalidFields] = useState([]);
+    const [schemaModificationLoading, setSchemaModificationLoading] = useState(false);
+    const [finalScore, setFinalScore] = useState(null);
+    const [fetched, setFetched] = useState(false);
+    const [predicate, setPredicate] = useState('');
 
-  const [scores, setScores] = useState({});
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [newAspectName, setNewAspectName] = useState("");
-  const [currentColIndex, setCurrentColIndex] = useState(null);
-  const [currentAspectIndex, setCurrentAspectIndex] = useState(null);
-  const [invalidFields, setInvalidFields] = useState([]);
+    // Added useEffect to fetch data when component mounts
+    useEffect(() => {
+        fetchGradeData();
+    }, []); // Empty dependency array ensures this runs only once on mount
+    const fetchGradeData = async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
 
+            if (!token) {
+                console.error('No authentication token found');
+                setLoading(false);
+                return;
+            }
 
-  const openAddModal = (colIndex) => {
-    setCurrentColIndex(colIndex);
-    setNewAspectName("");
-    setShowAddModal(true);
-  };
+            const response = await axios.get('/api/grades', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
 
-  const openEditModal = (colIndex, aspectIndex, currentName) => {
-    setCurrentColIndex(colIndex);
-    setCurrentAspectIndex(aspectIndex);
-    setNewAspectName(currentName);
-    setShowEditModal(true);
-  };
+            console.log("API Response:", response.data);
 
-  const openDeleteModal = (colIndex, aspectIndex) => {
-    setCurrentColIndex(colIndex);
-    setCurrentAspectIndex(aspectIndex);
-    setShowDeleteModal(true);
-  };
+            if (response.data && response.data.data) {
+                const { data } = response.data;
+                const newColumns = [];
+                const newScores = {};
 
-  const handleAddAspect = () => {
-    if (newAspectName.trim() !== "" && currentColIndex !== null) {
-      const updatedColumns = [...columns];
-      updatedColumns[currentColIndex].aspects.push(newAspectName.trim());
-      setColumns(updatedColumns);
-      setShowAddModal(false);
-    }
-  };
+                // Loop setiap section (penguasaan_materi, celah_keamanan, etc)
+                Object.entries(data).forEach(([sectionKey, sectionData]) => {
+                    // Ubah key jadi Title Case
+                    const title = sectionKey
+                        .split('_')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ');
 
-  const handleEditAspect = () => {
-    if (newAspectName.trim() !== "" && currentColIndex !== null && currentAspectIndex !== null) {
-      const updatedColumns = [...columns];
-      updatedColumns[currentColIndex].aspects[currentAspectIndex] = newAspectName.trim();
-      setColumns(updatedColumns);
-      setShowEditModal(false);
-    }
-  };
+                    const aspects = Object.keys(sectionData)
+                        .filter(key => !['id', 'user_id', 'created_at', 'updated_at'].includes(key)) // filter metadata field
+                        .map(key => key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')); // Title Case
 
-  const handleDeleteAspect = () => {
-    if (currentColIndex !== null && currentAspectIndex !== null) {
-      const updatedColumns = [...columns];
-      updatedColumns[currentColIndex].aspects.splice(currentAspectIndex, 1);
-      setColumns(updatedColumns);
-      setShowDeleteModal(false);
-    }
-  };
+                    newColumns.push({ title, aspects });
 
-  const handleSubmit = async () => {
-    const emptyFields = Object.entries(scores)
-      .filter(([key, value]) => value.trim() === "")
-      .map(([key]) => key);
-  
-    if (emptyFields.length > 0) {
-      setInvalidFields(emptyFields);
-      alert("Semua jumlah kesalahan harus diisi sebelum submit!");
-      return;
-    }
-  
-    setInvalidFields([]);
-    const payload = {
-      parameter: "Sistem Manajemen Basis Data",
-      data: scores,
+                    // Set nilai awal skor
+                    aspects.forEach(aspect => {
+                        const aspectKeySnake = aspect.toLowerCase().replace(/\s+/g, "_");
+                        newScores[`${title}-${aspect}`] = sectionData[aspectKeySnake]?.toString() || '';
+                    });
+                });
+
+                setColumns(newColumns);
+                setScores(newScores);
+            }
+        } catch (error) {
+            console.error('Error fetching grade data:', error);
+            if (error.response && error.response.status !== 404) {
+                alert("Error loading data: " + (error.response?.data?.message || error.message));
+            }
+        } finally {
+            setLoading(false);
+        }
+        setFetched(true);
+        setTimeout(() => setFetched(false), 5000);
     };
-  
-    try {
-      const response = await axios.post('/api/grade-submit', payload); //ganti API yang sesuai ja
-  
-      console.log('Submit successful:', response.data);
-      alert("Data berhasil dikirim!");
-    } catch (error) {
-      console.error('Submit failed:', error);
-      alert("Terjadi kesalahan saat mengirim data.");
-    }
-  };  
 
-  return (
-    <div className="bg-gray-100 min-h-screen pt-16">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <Header onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />
 
-      <main className="p-4 md:p-6 md:ml-64 flex flex-col">
-        <h1 className="text-2xl font-bold mb-6 text-left">Assestment Parameter</h1>
+    const resetModalState = () => {
+        setCurrentColIndex(null);
+        setCurrentAspectIndex(null);
+        setNewAspectName("");
+    };
 
-        <div className="bg-white p-6 rounded-xl shadow-md max-w-7xl w-full mx-auto">
-          <div className="bg-red-400 text-white border text-center font-medium p-2 mb-6 rounded-lg">
-            Assestment Parameter: Sistem Manajemen Basis Data / Task 1
-          </div>
+    const openAddModal = (colIndex) => {
+        setCurrentColIndex(colIndex);
+        setNewAspectName("");
+        setShowAddModal(true);
+    };
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {columns.map((col, colIndex) => (
-              <div key={colIndex}>
-                <h2 className="text-center font-semibold mb-3">{col.title}</h2>
-                {col.aspects.map((aspect, i) => (
-                  <div key={i} className="flex items-center mb-3 gap-1 outline outline-gray-200 px-3 py-1 rounded-md">
-                    <div className="flex-1">
-                      <p className="text-sm mb-1">{aspect}</p>
-                      <input
+    const openEditModal = (colIndex, aspectIndex, currentName) => {
+        setCurrentColIndex(colIndex);
+        setCurrentAspectIndex(aspectIndex);
+        setNewAspectName(currentName);
+        setShowEditModal(true);
+    };
+
+    const openDeleteModal = (colIndex, aspectIndex) => {
+        setCurrentColIndex(colIndex);
+        setCurrentAspectIndex(aspectIndex);
+        setShowDeleteModal(true);
+    };
+
+    const closeModal = (modalStateSetter) => {
+        modalStateSetter(false);
+        resetModalState();
+    };
+
+    const handleAddAspect = async () => {
+        if (newAspectName.trim() === "" || currentColIndex === null) {
+            alert("Please enter a valid name for the sub-aspect.");
+            return;
+        }
+
+        setSchemaModificationLoading(true);
+
+        try {
+            // Get the authentication token from localStorage
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                console.error('No authentication token found');
+                alert("You must be logged in to modify the schema.");
+                setSchemaModificationLoading(false);
+                return;
+            }
+
+            // Call the API to add a new column to the database
+            const response = await axios.post(
+                '/api/schema/add-column',
+                {
+                    categoryTitle: columns[currentColIndex].title,
+                    aspectName: newAspectName.trim()
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            console.log('Add column response:', response.data);
+
+            // Update the local state
+            const updatedColumns = [...columns];
+            updatedColumns[currentColIndex].aspects.push(newAspectName.trim());
+            setColumns(updatedColumns);
+            closeModal(setShowAddModal);
+
+            // Success message
+            alert(`New sub-aspect "${newAspectName.trim()}" has been added successfully.`);
+        } catch (error) {
+            console.error('Error adding column:', error);
+            alert("Error adding sub-aspect: " + (error.response?.data?.message || error.message));
+        } finally {
+            setSchemaModificationLoading(false);
+        }
+    };
+
+    const handleEditAspect = async () => {
+        if (newAspectName.trim() === "" || currentColIndex === null || currentAspectIndex === null) {
+            alert("Please enter a valid name for the sub-aspect.");
+            return;
+        }
+
+        setSchemaModificationLoading(true);
+
+        const oldAspectName = columns[currentColIndex].aspects[currentAspectIndex];
+
+        try {
+            // Get the authentication token from localStorage
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                console.error('No authentication token found');
+                alert("You must be logged in to modify the schema.");
+                setSchemaModificationLoading(false);
+                return;
+            }
+
+            // Call the API to rename the column in the database
+            const response = await axios.put(
+                '/api/schema/rename-column',
+                {
+                    categoryTitle: columns[currentColIndex].title,
+                    oldAspectName: oldAspectName,
+                    newAspectName: newAspectName.trim()
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            console.log('Rename column response:', response.data);
+
+            // Update the local state
+            const updatedColumns = [...columns];
+            updatedColumns[currentColIndex].aspects[currentAspectIndex] = newAspectName.trim();
+            setColumns(updatedColumns);
+
+            // Update scores if there's an existing score for this aspect
+            const oldKey = `${columns[currentColIndex].title}-${oldAspectName}`;
+            const newKey = `${columns[currentColIndex].title}-${newAspectName.trim()}`;
+
+            if (scores[oldKey] !== undefined) {
+                const updatedScores = { ...scores };
+                updatedScores[newKey] = updatedScores[oldKey];
+                delete updatedScores[oldKey];
+                setScores(updatedScores);
+            }
+
+            closeModal(setShowEditModal);
+
+            // Success message
+            alert(`Sub-aspect renamed from "${oldAspectName}" to "${newAspectName.trim()}" successfully.`);
+        } catch (error) {
+            console.error('Error renaming column:', error);
+            alert("Error renaming sub-aspect: " + (error.response?.data?.message || error.message));
+        } finally {
+            setSchemaModificationLoading(false);
+        }
+    };
+
+    const handleDeleteAspect = async () => {
+        if (currentColIndex === null || currentAspectIndex === null) {
+            alert("Cannot identify the sub-aspect to delete.");
+            return;
+        }
+
+        setSchemaModificationLoading(true);
+
+        const aspectName = columns[currentColIndex].aspects[currentAspectIndex];
+
+        try {
+            // Get the authentication token from localStorage
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                console.error('No authentication token found');
+                alert("You must be logged in to modify the schema.");
+                setSchemaModificationLoading(false);
+                return;
+            }
+
+            // Call the API to delete the column from the database
+            const response = await axios.delete(
+                '/api/schema/delete-column',
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    },
+                    data: {
+                        categoryTitle: columns[currentColIndex].title,
+                        aspectName: aspectName
+                    }
+                }
+            );
+
+            console.log('Delete column response:', response.data);
+
+            // Update the local state
+            const updatedColumns = [...columns];
+            updatedColumns[currentColIndex].aspects.splice(currentAspectIndex, 1);
+            setColumns(updatedColumns);
+
+            // Remove the score if it exists
+            const key = `${columns[currentColIndex].title}-${aspectName}`;
+            if (scores[key] !== undefined) {
+                const updatedScores = { ...scores };
+                delete updatedScores[key];
+                setScores(updatedScores);
+            }
+
+            closeModal(setShowDeleteModal);
+
+            // Success message
+            alert(`Sub-aspect "${aspectName}" has been deleted successfully.`);
+        } catch (error) {
+            console.error('Error deleting column:', error);
+            alert("Error deleting sub-aspect: " + (error.response?.data?.message || error.message));
+        } finally {
+            setSchemaModificationLoading(false);
+        }
+    };
+
+    const validateScores = () => {
+        // Check all scores are provided and valid
+        const emptyFields = [];
+
+        columns.forEach(col => {
+            col.aspects.forEach(aspect => {
+                const key = `${col.title}-${aspect}`;
+                const value = scores[key];
+
+                if (value === undefined || value === '') {
+                    emptyFields.push(key);
+                } else if (isNaN(parseInt(value, 10))) {
+                    emptyFields.push(key);
+                }
+            });
+        });
+
+        return emptyFields;
+    };
+
+    const handleSubmit = async () => {
+        // Validate the form data
+        const emptyFields = validateScores();
+
+        if (emptyFields.length > 0) {
+            setInvalidFields(emptyFields);
+            alert("All fields must be filled with valid numbers before submitting!");
+            return;
+        }
+
+        setInvalidFields([]);
+        setLoading(true);
+
+        // Create a structured payload from the scores
+        const formattedData = {};
+
+        columns.forEach(col => {
+            const categoryKey = col.title.toLowerCase().replace(/\s+/g, "_");
+            formattedData[categoryKey] = {};
+
+            col.aspects.forEach(aspect => {
+                const aspectKey = aspect.toLowerCase().replace(/\s+/g, "_");
+                const scoreKey = `${col.title}-${aspect}`;
+                formattedData[categoryKey][aspectKey] = parseInt(scores[scoreKey], 10);
+            });
+        });
+
+        const payload = {
+            parameter: "Sistem Manajemen Basis Data",
+            data: formattedData,
+        };
+        try {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                console.error('No authentication token found');
+                alert("You must be logged in to submit grades.");
+                setLoading(false);
+                return;
+            }
+
+            const response = await axios.post('/api/grade-submit', payload, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            console.log('Submit successful:', response.data);
+
+
+            // Calculate Final Score
+            let totalErrors = 0;
+            Object.values(scores).forEach(value => {
+                totalErrors += parseInt(value, 10) || 0;
+            });
+            const calculatedScore = Math.max(90 - totalErrors, 0);
+            setFinalScore(calculatedScore);
+            let pred = '';
+            if (calculatedScore >= 86) pred = 'A';
+            else if (calculatedScore >= 76) pred = 'AB';
+            else if (calculatedScore >= 66) pred = 'B';
+            else if (calculatedScore >= 61) pred = 'BC';
+            else if (calculatedScore >= 56) pred = 'C';
+            else if (calculatedScore >= 41) pred = 'D';
+            else pred = 'E';
+
+            setPredicate(pred);
+
+            alert("Data successfully submitted!");
+            setSubmitted(true);
+            setTimeout(() => setSubmitted(false), 5000);
+
+
+        } catch (error) {
+            console.error('Submit failed:', error);
+            alert("Error submitting data: " + (error.response?.data?.message || error.message));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Helper function to determine if a field is invalid
+    const isFieldInvalid = (key) => invalidFields.includes(key);
+
+    // Function to handle score input change
+    const handleScoreChange = (key, value) => {
+        // Update the scores state
+        setScores(prev => ({
+            ...prev,
+            [key]: value
+        }));
+
+        // Remove field from invalidFields if it was previously marked as invalid
+        if (invalidFields.includes(key)) {
+            setInvalidFields(prev => prev.filter(field => field !== key));
+        }
+    };
+
+    return (
+        <div className="bg-gray-100 min-h-screen pt-16">
+            <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+            <Header onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />
+
+            <main className="p-4 md:p-6 md:ml-64 flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-2xl font-bold text-left">Assessment Parameter</h1>
+
+                    {loading ? (
+                        <div className="flex items-center text-gray-500">
+                            <RefreshCw size={18} className="animate-spin mr-2" />
+                            Loading...
+                        </div>
+                    ) : (
+                        <button
+                            onClick={fetchGradeData}
+                            className="flex items-center text-sm gap-1 text-gray-600 px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-200"
+                        >
+                            <RefreshCw size={16} />
+                            Refresh Data
+                        </button>
+                    )}
+                </div>
+
+                <div className="bg-white p-6 rounded-xl shadow-md max-w-7xl w-full mx-auto">
+                    <div className="bg-red-400 text-white border text-center font-medium p-2 mb-6 rounded-lg">
+                        Assessment Parameter: Sistem Manajemen Basis Data / Task 1
+                    </div>
+
+                    {submitted && (
+                        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded mb-6">
+                            Data has been submitted. You can make changes and resubmit if needed.
+                        </div>
+                    )}
+
+                    {fetched && (
+                        <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-2 rounded mb-6">
+                            Data has been loaded successfully.
+                        </div>
+                    )}
+
+                    {finalScore !== null && (
+                    <div className="bg-blue-100 border border-blue-400 text-blue-800 px-4 py-2 rounded mb-6 text-center">
+                        Final Score: <span className="font-bold text-2xl">{finalScore}</span> / 100
+                        <span className="ml-1 mr-1">with Predicate: <span className="font-bold text-2xl">{predicate}</span></span>
+                    </div>
+                    )}
+
+
+                    {columns.length === 0 && !loading && (
+                        <div className="text-center py-8 text-gray-500">
+                            No assessment parameters found. Please refresh or contact administrator.
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {columns.map((col, colIndex) => (
+                            <div key={colIndex} className="mb-4">
+                                <h2 className="text-center font-semibold mb-3">{col.title}</h2>
+                                {col.aspects.map((aspect, i) => {
+                                    const scoreKey = `${col.title}-${aspect}`;
+                                    return (
+                                        <div key={i} className="flex items-center mb-3 gap-1 outline outline-gray-200 px-3 py-1 rounded-md">
+                                            <div className="flex-1">
+                                                <p className="text-sm mb-1">{aspect}</p>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Number of Error(s)"
+                                                    className={`w-full px-3 py-2 border-2 rounded shadow-sm my-1 ${isFieldInvalid(scoreKey)
+                                                        ? "border-red-500"
+                                                        : "border-gray-400"
+                                                        }`}
+                                                    value={scores[scoreKey] || ""}
+                                                    onChange={(e) => handleScoreChange(scoreKey, e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="flex items-center">
+                                                <button
+                                                    onClick={() => openEditModal(colIndex, i, aspect)}
+                                                    className="h-8 w-8 flex items-center justify-center hover:bg-gray-200 rounded-md transition"
+                                                    title="Edit"
+                                                    disabled={loading}
+                                                >
+                                                    <Pencil size={15} className="text-gray-700" />
+                                                </button>
+                                                <button
+                                                    onClick={() => openDeleteModal(colIndex, i)}
+                                                    className="h-8 w-8 flex items-center justify-center hover:bg-red-100 rounded-md transition"
+                                                    title="Delete"
+                                                    disabled={loading}
+                                                >
+                                                    <Trash2 size={15} className="text-red-500" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                <button
+                                    onClick={() => openAddModal(colIndex)}
+                                    className="flex items-center text-sm text-gray-600 mt-2 hover:text-black hover:underline transition"
+                                    disabled={loading}
+                                >
+                                    <PlusCircle className="w-4 h-4 mr-1" />
+                                    Add Sub-aspect
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="flex justify-end mt-8">
+                        <button
+                            onClick={handleSubmit}
+                            disabled={loading || columns.length === 0}
+                            className={`flex items-center gap-2 px-6 py-3 ${loading || columns.length === 0
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-red-500 hover:bg-red-700"
+                                } text-white rounded-lg font-semibold transition`}
+                        >
+                            {loading ? (
+                                <>
+                                    <RefreshCw size={18} className="animate-spin text-white" />
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    <Send size={18} className="text-white" />
+                                    Submit Grade
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </main>
+
+            {/* Add Aspect Modal */}
+            {showAddModal && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                    <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
+                        <h2 className="text-xl font-bold text-red-600 mb-4">Add Sub-aspect</h2>
+                        <input
                             type="text"
-                            placeholder="Number of Error(s)"
-                            className={`w-full px-3 py-2 border-2 rounded shadow-sm my-1 ${
-                                invalidFields.includes(`${col.title}-${aspect}`)
-                                ? "border-red-500"
-                                : "border-gray-400"
-                            }`}
-                            value={scores[`${col.title}-${aspect}`] || ""}
-                            onChange={(e) =>
-                                setScores((prev) => ({
-                                ...prev,
-                                [`${col.title}-${aspect}`]: e.target.value,
-                                }))
-                            }
-                            />
+                            placeholder="Sub-aspect Name"
+                            value={newAspectName}
+                            onChange={(e) => setNewAspectName(e.target.value)}
+                            className="w-full px-3 py-2 border rounded mb-5 border-gray-500"
+                            disabled={schemaModificationLoading}
+                            autoFocus
+                        />
+                        <div className="flex justify-center space-x-4">
+                            <button
+                                onClick={() => closeModal(setShowAddModal)}
+                                className="px-6 py-2 border border-gray-400 text-gray-800 rounded-md hover:bg-red-100 transition-all"
+                                disabled={schemaModificationLoading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAddAspect}
+                                className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-all"
+                                disabled={schemaModificationLoading || !newAspectName.trim()}
+                            >
+                                {schemaModificationLoading ? (
+                                    <>
+                                        <RefreshCw size={16} className="animate-spin inline mr-2" />
+                                        Adding...
+                                    </>
+                                ) : "Add"}
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex items-center">
-                      <button
-                        onClick={() => openEditModal(colIndex, i, aspect)}
-                        className="h-8 w-8 flex items-center justify-center hover:bg-gray-200 rounded-md transition"
-                        title="Edit"
-                      >
-                        <Pencil size={15} className="text-gray-700" />
-                      </button>
-                      <button
-                        onClick={() => openDeleteModal(colIndex, i)}
-                        className="h-8 w-8 flex items-center justify-center hover:bg-red-100 rounded-md transition"
-                        title="Delete"
-                      >
-                        <Trash2 size={15} className="text-red-500" />
-                      </button>
+                </div>
+            )}
+
+            {/* Edit Aspect Modal */}
+            {showEditModal && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                    <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
+                        <h2 className="text-xl font-bold text-red-600 mb-4">Edit Sub-aspect</h2>
+                        <input
+                            type="text"
+                            placeholder="Sub-aspect Name"
+                            value={newAspectName}
+                            onChange={(e) => setNewAspectName(e.target.value)}
+                            className="w-full px-3 py-2 border rounded mb-5 border-gray-500"
+                            disabled={schemaModificationLoading}
+                            autoFocus
+                        />
+                        <div className="flex justify-center space-x-4">
+                            <button
+                                onClick={() => closeModal(setShowEditModal)}
+                                className="px-6 py-2 border border-gray-400 text-gray-800 rounded-md hover:bg-red-100 transition-all"
+                                disabled={schemaModificationLoading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleEditAspect}
+                                className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-all"
+                                disabled={schemaModificationLoading || !newAspectName.trim()}
+                            >
+                                {schemaModificationLoading ? (
+                                    <>
+                                        <RefreshCw size={16} className="animate-spin inline mr-2" />
+                                        Saving...
+                                    </>
+                                ) : "Save"}
+                            </button>
+                        </div>
                     </div>
-                  </div>
-                ))}
-                <button
-                  onClick={() => openAddModal(colIndex)}
-                  className="flex items-center text-sm text-gray-600 mt-2 hover:text-black hover:underline transition"
-                >
-                  <PlusCircle className="w-4 h-4 mr-1" />
-                  Add Sub-aspect
-                </button>
-              </div>
-            ))}
-          </div>
+                </div>
+            )}
 
-          {/* Tombol Submit */}
-          <div className="flex justify-end mt-8">
-            <button
-            onClick={handleSubmit}
-            className="flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-700 text-white rounded-lg font-semibold transition"
-            >
-            <Send size={18} className="text-white" />
-            Submit Grade
-            </button>
-          </div>
+            {/* Delete Aspect Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                    <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
+                        <h2 className="text-xl font-bold text-red-600 mb-4">Delete Sub-aspect</h2>
+                        <p className="text-gray-800 mb-5">
+                            Are you sure? This will permanently remove this field from the database.
+                        </p>
+                        <div className="flex justify-center space-x-4">
+                            <button
+                                onClick={() => closeModal(setShowDeleteModal)}
+                                className="px-6 py-2 border border-gray-800 text-gray-800 rounded-md hover:bg-red-100 transition-all"
+                                disabled={schemaModificationLoading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteAspect}
+                                className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-all"
+                                disabled={schemaModificationLoading}
+                            >
+                                {schemaModificationLoading ? (
+                                    <>
+                                        <RefreshCw size={16} className="animate-spin inline mr-2" />
+                                        Deleting...
+                                    </>
+                                ) : "Delete"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-      </main>
-
-      {/* Modal Tambah Aspek */}
-      {showAddModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
-            <h2 className="text-xl font-bold text-red-600 mb-4">Add Sub-aspect</h2>
-            <input
-              type="text"
-              placeholder="Sub-aspect Name"
-              value={newAspectName}
-              onChange={(e) => setNewAspectName(e.target.value)}
-              className="w-full px-3 py-2 border rounded mb-5 border-gray-500"
-            />
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-6 py-2 border border-gray-400 text-gray-800 rounded-md hover:bg-red-100 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddAspect}
-                className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-all"
-              >
-                Add
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Edit Aspek */}
-      {showEditModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
-            <h2 className="text-xl font-bold text-red-600 mb-4">Edit Sub-aspect</h2>
-            <input
-              type="text"
-              placeholder="Nama Subjek Aspek"
-              value={newAspectName}
-              onChange={(e) => setNewAspectName(e.target.value)}
-              className="w-full px-3 py-2 border rounded mb-5 border-gray-500"
-            />
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="px-6 py-2 border border-gray-400 text-gray-800 rounded-md hover:bg-red-100 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEditAspect}
-                className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-all"
-              >
-                Edit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Hapus Aspek */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
-            <h2 className="text-xl font-bold text-red-600 mb-4">Delete Sub-aspect</h2>
-            <p className="text-gray-800 mb-5">Are you sure?</p>
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="px-6 py-2 border border-gray-800 text-gray-800 rounded-md hover:bg-red-100 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteAspect}
-                className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-all"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default Grade;

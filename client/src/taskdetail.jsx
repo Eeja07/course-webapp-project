@@ -48,26 +48,31 @@ function TaskDetail() {
               </div>
               <div>
                 <p>File Submissions</p>
-                <p className="font-normal flex items-center gap-1">
-                  <span className="text-yellow-300">📁</span> Resume Basis Data_Defender Artha_5024221032.pdf
-                </p>
+                <a
+  href="https://drive.google.com/file/d/1pDA3h-WS8TnwHswTok3AhwXKLzJtgAvX/view?usp=sharing"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="font-normal flex items-center gap-1 text-yellow-100 text-bold hover:underline"
+>
+  <span className="text-yellow-300">📁</span> Resume Basis Data_Defender Artha_5024221032.pdf (click here)
+</a>
               </div>
             </div>
           </div>
 
           {/* Button Area */}
-          <div className="flex justify-between">
-            <button className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm">
+          <div className="flex justify-center mt-4">
+            {/* <button className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm">
               <MessageCircleMore size={16} />
               Add Comments
-            </button>
+            </button> */}
             <button
-      onClick={() => navigate("/grade")}
-      className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm"
-    >
-      <Info size={16} />
-      Grade
-    </button>
+              onClick={() => navigate("/grade")}
+              className="w-full justify-center flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm"
+            >
+              <Info size={18} />
+              Grade
+            </button>
           </div>
         </div>
       </main>

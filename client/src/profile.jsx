@@ -8,6 +8,7 @@ const ProfilePage = () => {
   const fileInputRef = useRef(null); // Defining the ref for file input
   const [editMode, setEditMode] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profile, setProfile] = useState({
     nama: '',
     nip: '',
@@ -116,11 +117,11 @@ const ProfilePage = () => {
     return <div>{error}</div>;
   }
   return (
-    <div className="bg-gray-100 min-h-screen pl-64 pt-16">
-      <Sidebar />
-      <Header />
+    <div className="bg-gray-100 min-h-screen pt-16 md:pl-64">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Header onToggleSidebar={() => setSidebarOpen(prev => !prev)} />
 
-      <main className="p-10">
+      <main className="p-4 md:p-10">
         <h2 className="text-2xl font-bold text-red-600 border-2 border-red-600 inline-block px-6 py-1 rounded-full mb-10">
           Lecturer Profile
         </h2>
@@ -128,7 +129,7 @@ const ProfilePage = () => {
         <div className="flex flex-col md:flex-row gap-10 items-start">
           {/* Profile Photo */}
           <div
-            className="relative w-64 h-64 rounded-3xl border-4 border-red-500 overflow-hidden cursor-pointer"
+            className="relative w-68 h-68 md:w-64 md:h-64 rounded-3xl border-4 border-red-500 overflow-hidden cursor-pointer"
             onClick={() => editMode && fileInputRef.current.click()}
             title={editMode ? 'Click to change photo' : ''}
           >
@@ -193,7 +194,7 @@ function ProfileRow({ label, name, value, onChange, editMode }) {
           className="bg-white border border-gray-300 px-4 py-2 rounded-md text-gray-800 w-full max-w-md"
         />
       ) : (
-        <span className="bg-gray-300 px-4 py-2 rounded-md text-gray-800 min-w-[250px]">
+        <span className="bg-gray-300 px-4 py-2 rounded-md text-gray-800 w-full sm:w-auto">
           {value || <span className="text-gray-400 italic">Not provided</span>}
         </span>
       )}

@@ -12,7 +12,7 @@ function Sidebar({ isOpen, onClose }) {
 
   const handleLogout = () => {
     setShowLogoutConfirm(false)
-    // TODO: Tambahkan logika logout misal hapus token
+    localStorage.removeItem('token');
     navigate('/')
   }
 

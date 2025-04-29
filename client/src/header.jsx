@@ -16,17 +16,11 @@ function Header({ onToggleSidebar }) {
 
       {/* RIGHT Content */}
       <div className="flex items-center gap-2 sm:gap-4 md:gap-6 ml-auto">
-        
-        {/* Button Parameter Penilaian */}
-        <button className="bg-white text-red-600 font-semibold px-3 py-1.5 rounded-xl hover:bg-red-100 transition flex items-center gap-1 text-sm whitespace-nowrap">
-          <Plus size={16} />
-          Parameter Penilaian
-        </button>
 
        {/* User Info*/}
        <div
           onClick={() => navigate('/profile')}
-          className="flex items-center gap-2 cursor-pointer hover:bg-red-400 px-2 py-1 rounded-xl transition-all"
+          className="flex items-center gap-2 cursor-pointer hover:bg-red-400 px-2 py-1 rounded-full transition-all"
         >
           <span className="hidden md:inline text-sm font-medium whitespace-nowrap">
             Halo, user@example.com

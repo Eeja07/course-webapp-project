@@ -6,6 +6,9 @@ import Dashboard from './dashboard'
 import Profile from './profile'
 import CalendarPage from './calendar'
 import HomePage from './home'
+import TaskList from './tasklist'
+import TaskDetail from './taskdetail'
+import StudentList from './studentlist'
 
 function App() {
   return (
@@ -17,6 +20,9 @@ function App() {
       <Route path="/profile" element={<Profile />} />
       <Route path="/calendar" element={<CalendarPage />} />
       <Route path="/home" element={<HomePage />} />
+      <Route path="/tasklist" element={<TaskList />} />
+      <Route path="/taskdetail" element={<TaskDetail />} />
+      <Route path="/studentlist" element={<StudentList />} />
     </Routes>
   );
 }

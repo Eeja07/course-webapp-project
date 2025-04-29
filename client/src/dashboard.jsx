@@ -1,9 +1,11 @@
 import Sidebar from './sidebar'
 import Header from './header'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false) 
+  const navigate = useNavigate()
   const dummyCourses = [
     {
       title: 'Sistem Manajemen Basis Data',
@@ -45,24 +47,30 @@ function Dashboard() {
               Your Courses
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {dummyCourses.map((course, i) => (
-                <div
-                  key={i}
-                  className="border rounded-xl overflow-hidden shadow bg-white transform transition-transform duration-300 hover:scale-105 hover:shadow-lg"
-                >
-                  <img
-                    src={course.image}
-                    alt={course.title}
-                    className="h-40 w-full object-cover"
-                  />
-                  <div className="bg-red-600 text-white p-3 text-sm">
-                    <div>{course.title}</div>
-                    <div>{course.code}</div>
-                    <div>{course.grade}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+  {dummyCourses.map((course, i) => {
+    const isBasdat = course.title === 'Sistem Manajemen Basis Data'
+    return (
+      <div
+        key={i}
+        onClick={() => isBasdat && navigate('/tasklist')}
+        className={`cursor-pointer border rounded-xl overflow-hidden shadow bg-white transform transition-transform duration-300 hover:scale-105 hover:shadow-lg ${
+          isBasdat ? 'hover:ring-2 hover:ring-red-400' : ''
+        }`}
+      >
+        <img
+          src={course.image}
+          alt={course.title}
+          className="h-40 w-full object-cover"
+        />
+        <div className="bg-red-600 text-white p-3 text-sm">
+          <div>{course.title}</div>
+          <div>{course.code}</div>
+          <div>{course.grade}</div>
+        </div>
+      </div>
+    )
+  })}
+</div>
           </section>
 
           {/* Recently Accessed */}
@@ -71,24 +79,30 @@ function Dashboard() {
               Recently Accessed
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {dummyCourses.map((course, i) => (
-                <div
-                  key={i}
-                  className="border rounded-xl overflow-hidden shadow bg-white transform transition-transform duration-300 hover:scale-105 hover:shadow-lg"
-                >
-                  <img
-                    src={course.image}
-                    alt={course.title}
-                    className="h-40 w-full object-cover"
-                  />
-                  <div className="bg-red-600 text-white p-3 text-sm">
-                    <div>{course.title}</div>
-                    <div>{course.code}</div>
-                    <div>{course.grade}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+  {dummyCourses.map((course, i) => {
+    const isBasdat = course.title === 'Sistem Manajemen Basis Data'
+    return (
+      <div
+        key={i}
+        onClick={() => isBasdat && navigate('/tasklist')}
+        className={`cursor-pointer border rounded-xl overflow-hidden shadow bg-white transform transition-transform duration-300 hover:scale-105 hover:shadow-lg ${
+          isBasdat ? 'hover:ring-2 hover:ring-red-400' : ''
+        }`}
+      >
+        <img
+          src={course.image}
+          alt={course.title}
+          className="h-40 w-full object-cover"
+        />
+        <div className="bg-red-600 text-white p-3 text-sm">
+          <div>{course.title}</div>
+          <div>{course.code}</div>
+          <div>{course.grade}</div>
+        </div>
+      </div>
+    )
+  })}
+</div>
           </section>
 
         </div>

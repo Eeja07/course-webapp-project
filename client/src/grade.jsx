@@ -18,14 +18,15 @@ const Grade = () => {
     const [currentAspectIndex, setCurrentAspectIndex] = useState(null);
     const [invalidFields, setInvalidFields] = useState([]);
     const [schemaModificationLoading, setSchemaModificationLoading] = useState(false);
-    const [finalScore, setFinalScore] = useState(null);
     const [fetched, setFetched] = useState(false);
-    const [predicate, setPredicate] = useState('');
+    const [finalScore, setFinalScore] = useState(null);
+    const [predicate, setPredicate] = useState(null);
 
-    // Added useEffect to fetch data when component mounts
+    // 1. Perbarui useEffect untuk memanggil fetchFinalScore saat komponen dimuat
     useEffect(() => {
         fetchGradeData();
-    }, []); // Empty dependency array ensures this runs only once on mount
+        fetchFinalScore(); // Tambahkan ini untuk mengambil nilai akhir saat halaman dimuat
+    }, []);
     const fetchGradeData = async () => {
         setLoading(true);
         try {
@@ -347,6 +348,7 @@ const Grade = () => {
             parameter: "Sistem Manajemen Basis Data",
             data: formattedData,
         };
+
         try {
             const token = localStorage.getItem('token');
 
@@ -357,6 +359,7 @@ const Grade = () => {
                 return;
             }
 
+            // Submit grades data
             const response = await axios.post('/api/grade-submit', payload, {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -365,29 +368,28 @@ const Grade = () => {
 
             console.log('Submit successful:', response.data);
 
-
-            // Calculate Final Score
-            let totalErrors = 0;
-            Object.values(scores).forEach(value => {
-                totalErrors += parseInt(value, 10) || 0;
+            // Calculate final grade
+            const finalGradeResponse = await axios.get('/api/grades/final', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
             });
-            const calculatedScore = Math.max(90 - totalErrors, 0);
-            setFinalScore(calculatedScore);
-            let pred = '';
-            if (calculatedScore >= 86) pred = 'A';
-            else if (calculatedScore >= 76) pred = 'AB';
-            else if (calculatedScore >= 66) pred = 'B';
-            else if (calculatedScore >= 61) pred = 'BC';
-            else if (calculatedScore >= 56) pred = 'C';
-            else if (calculatedScore >= 41) pred = 'D';
-            else pred = 'E';
 
-            setPredicate(pred);
+            console.log('Final grade calculation:', finalGradeResponse.data);
 
-            alert("Data successfully submitted!");
+            const finalScore = await axios.get('/api/final-grades', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            console.log('Final score:', finalScore.data);
+
+
+            await fetchFinalScore(); // Refresh final score after submission
+            // Optional: Show success message
+            alert("Data submitted successfully!");
             setSubmitted(true);
             setTimeout(() => setSubmitted(false), 5000);
-
 
         } catch (error) {
             console.error('Submit failed:', error);
@@ -396,7 +398,8 @@ const Grade = () => {
             setLoading(false);
         }
     };
-
+    // Langkah 3: Panggil fungsi saat komponen dimuat 
+    // (letakkan kode ini di dalam useEffect)
     // Helper function to determine if a field is invalid
     const isFieldInvalid = (key) => invalidFields.includes(key);
 
@@ -411,6 +414,38 @@ const Grade = () => {
         // Remove field from invalidFields if it was previously marked as invalid
         if (invalidFields.includes(key)) {
             setInvalidFields(prev => prev.filter(field => field !== key));
+        }
+    };
+    // Tambahkan fungsi fetchFinalScore setelah fungsi fetchGradeData
+    const fetchFinalScore = async () => {
+        try {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                console.error('No authentication token found');
+                return;
+            }
+
+            const response = await axios.get('/api/final-grades', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            console.log('Final score data:', response.data);
+
+            if (response.data && response.data.data) {
+                // Update state dengan data dari API
+                setFinalScore(response.data.data.finalScore);
+                setPredicate(response.data.data.predicate);
+            }
+        } catch (error) {
+            console.error('Error fetching final score:', error);
+            // Jika error 404, set nilai ke null (belum dihitung)
+            if (error.response?.status === 404) {
+                setFinalScore(null);
+                setPredicate(null);
+            }
         }
     };
 
@@ -457,10 +492,10 @@ const Grade = () => {
                     )}
 
                     {finalScore !== null && (
-                    <div className="bg-blue-100 border border-blue-400 text-blue-800 px-4 py-2 rounded mb-6 text-center">
-                        Final Score: <span className="font-bold text-2xl">{finalScore}</span> / 100
-                        <span className="ml-1 mr-1">with Predicate: <span className="font-bold text-2xl">{predicate}</span></span>
-                    </div>
+                        <div className="bg-blue-100 border border-blue-400 text-blue-800 px-4 py-2 rounded mb-6 text-center">
+                            Final Score: <span className="font-bold text-2xl">{finalScore}</span> / 100
+                            <span className="ml-1 mr-1">with Predicate: <span className="font-bold text-2xl">{predicate}</span></span>
+                        </div>
                     )}
 
 

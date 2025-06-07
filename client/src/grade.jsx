@@ -21,11 +21,13 @@ const Grade = () => {
     const [fetched, setFetched] = useState(false);
     const [finalScore, setFinalScore] = useState(null);
     const [predicate, setPredicate] = useState(null);
+    const [showAddMainAspectModal, setShowAddMainAspectModal] = useState(false);
+    const [newMainAspectName, setNewMainAspectName] = useState("");
+    const [addingMainAspect, setAddingMainAspect] = useState(false);
 
-    // 1. Perbarui useEffect untuk memanggil fetchFinalScore saat komponen dimuat
     useEffect(() => {
         fetchGradeData();
-        fetchFinalScore(); // Tambahkan ini untuk mengambil nilai akhir saat halaman dimuat
+        fetchFinalScore(); 
     }, []);
     const fetchGradeData = async () => {
         setLoading(true);
@@ -498,6 +500,16 @@ const Grade = () => {
                         </div>
                     )}
 
+                    <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-semibold text-gray-800">Grade Aspects</h2>
+                    <button
+                        onClick={() => setShowAddMainAspectModal(true)}
+                        className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition text-sm"
+                    >
+                        + Add Main Aspect
+                    </button>
+                    </div>
+
 
                     {columns.length === 0 && !loading && (
                         <div className="text-center py-8 text-gray-500">
@@ -695,6 +707,72 @@ const Grade = () => {
                     </div>
                 </div>
             )}
+         {showAddMainAspectModal && (
+  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+    <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
+      <h2 className="text-xl font-bold text-green-600 mb-4">Add Main Aspect</h2>
+      <input
+        type="text"
+        placeholder="Main Aspect Name"
+        value={newMainAspectName}
+        onChange={(e) => setNewMainAspectName(e.target.value)}
+        className="w-full px-3 py-2 border rounded mb-5 border-gray-500"
+        disabled={addingMainAspect}
+        autoFocus
+      />
+      <div className="flex justify-center space-x-4">
+        <button
+          onClick={() => {
+            setShowAddMainAspectModal(false);
+            setNewMainAspectName("");
+          }}
+          className="px-6 py-2 border border-gray-400 text-gray-800 rounded-md hover:bg-red-100 transition-all"
+          disabled={addingMainAspect}
+        >
+          Cancel
+        </button>
+     <button
+  onClick={async () => {
+    const trimmed = newMainAspectName.trim();
+    const categoryKey = trimmed.toLowerCase().replace(/\s+/g, "_");
+
+    if (!trimmed) return alert("Enter a valid aspect name.");
+
+    setAddingMainAspect(true);
+
+    try {
+      const defaultSub = "Sub-aspek 1";
+
+      // SIMULASI TANPA BACKEND: langsung update UI
+      setColumns(prev => [...prev, { title: trimmed, aspects: [defaultSub] }]);
+      setScores(prev => ({ ...prev, [`${trimmed}-${defaultSub}`]: "" }));
+
+      alert("Main Aspect added (Frontend Only).");
+      setShowAddMainAspectModal(false);
+      setNewMainAspectName("");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to add main aspect.");
+    } finally {
+      setAddingMainAspect(false);
+    }
+  }}
+  className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-all"
+  disabled={addingMainAspect}
+>
+  {addingMainAspect ? (
+    <>
+      <RefreshCw size={16} className="animate-spin inline mr-2" />
+      Adding...
+    </>
+  ) : (
+    "Add"
+  )}
+</button>
+      </div>
+    </div>
+  </div>
+)}
         </div>
     );
 };

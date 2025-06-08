@@ -27,11 +27,11 @@ function TaskDetail() {
           <div className="bg-gray-300 p-6 rounded-xl">
             <div className="bg-red-400 p-6 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4 text-white text-sm font-medium">
               <div>
-                <p>Nama Mahasiswa</p>
+                <p>Student Name</p>
                 <p className="font-normal">Defender Artha Widiprasetyo</p>
               </div>
               <div>
-                <p>Nrp</p>
+                <p>NRP</p>
                 <p className="font-normal">5024221031</p>
               </div>
               <div>

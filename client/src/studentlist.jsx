@@ -41,7 +41,7 @@ function StudentList() {
           </div>
 
           {/* Title */}
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Mahasiswa</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Student</h2>
 
           {/* Table */}
           <div className="overflow-auto bg-white rounded-xl shadow-md">

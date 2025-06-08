@@ -591,17 +591,24 @@ const Grade = () => {
                     )}
 
                     {fetched && (
-                        <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-2 rounded mb-6">
+                        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded mb-6">
                             Data has been loaded successfully.
                         </div>
                     )}
 
-                    {finalScore !== null && (
-                        <div className="bg-blue-100 border border-blue-400 text-blue-800 px-4 py-2 rounded mb-6 text-center">
-                            Final Score: <span className="font-bold text-2xl">{finalScore}</span> / 100
-                            <span className="ml-1 mr-1">with Predicate: <span className="font-bold text-2xl">{predicate}</span></span>
-                        </div>
-                    )}
+                   {finalScore !== null && (
+  <div className="bg-gradient-to-r from-pink-100 to-red-200 border-red-400 shadow-md p-5 rounded-lg mb-6 text-center">
+    <h2 className="text-lg font-semibold text-red-900 mb-2">🎯 Assessment Result</h2>
+    <p className="text-gray-800 text-sm mb-1">Your final score is:</p>
+    <div className="text-4xl font-extrabold text-pink-600 tracking-wide">
+      {finalScore} <span className="text-lg font-medium text-gray-700">/ 100</span>
+    </div>
+    <p className="mt-2 text-sm text-gray-700">With Predicate:</p>
+    <div className="inline-block mt-1 px-4 py-1 bg-pink-600 text-white font-bold rounded-full text-lg shadow-sm tracking-wide">
+      {predicate}
+    </div>
+  </div>
+)}
 
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-lg font-semibold text-gray-800">Grade Aspects</h2>
@@ -622,7 +629,7 @@ const Grade = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {columns.map((col, colIndex) => (
                             <div key={colIndex} className="mb-4">
-                            <div className="mb-4 p-3 rounded-lg border border-gray-300 bg-red-50 shadow-sm relative">
+                            <div className="mb-4 p-3 rounded-lg border-2 border-red-300 bg-red-50 shadow-sm relative">
   <div className="flex justify-between items-center">
     <h2 className="font-semibold text-red-800 text-base">
       {col.title}
@@ -661,7 +668,7 @@ const Grade = () => {
                                 {col.aspects.map((aspect, i) => {
                                     const scoreKey = `${col.title}-${aspect}`;
                                     return (
-                                        <div key={i} className="flex items-center mb-3 gap-1 outline outline-gray-200 px-3 py-1 rounded-md">
+                                        <div key={i} className="flex items-center mb-3 gap-1 outline outline-red-200 px-3 py-1 rounded-md">
                                             <div className="flex-1">
                                                 <p className="text-sm mb-1">{aspect}</p>
                                                 <input
@@ -669,7 +676,7 @@ const Grade = () => {
                                                     placeholder="Number of Error(s)"
                                                     className={`w-full px-3 py-2 border-2 rounded shadow-sm my-1 ${isFieldInvalid(scoreKey)
                                                         ? "border-red-500"
-                                                        : "border-gray-400"
+                                                        : "border-red-200"
                                                         }`}
                                                     value={scores[scoreKey] || ""}
                                                     onChange={(e) => handleScoreChange(scoreKey, e.target.value)}

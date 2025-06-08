@@ -126,10 +126,10 @@ const ProfilePage = () => {
           Lecturer Profile
         </h2>
 
-        <div className="flex flex-col md:flex-row gap-10 items-start">
+      <div className="flex flex-col md:flex-row gap-10 items-stretch">
           {/* Profile Photo */}
           <div
-            className="relative w-68 h-68 md:w-64 md:h-64 rounded-3xl border-4 border-red-500 overflow-hidden cursor-pointer"
+         className="relative w-72 md:w-80 h-full md:h-auto rounded-3xl border-4 border-red-500 overflow-hidden cursor-pointer flex-shrink-0"
             onClick={() => editMode && fileInputRef.current.click()}
             title={editMode ? 'Click to change photo' : ''}
           >
@@ -158,20 +158,20 @@ const ProfilePage = () => {
           </div>
 
           {/* Profile Information */}
-          <div className="flex flex-col gap-4 w-full max-w-xl">
+        <div className="flex flex-col gap-4 w-full max-w-xl bg-white rounded-lg shadow-md p-6 border border-gray-200">
             <ProfileRow label="Nama" name="nama" value={profile.nama} onChange={handleChange} editMode={editMode} />
             <ProfileRow label="NIP" name="nip" value={profile.nip} onChange={handleChange} editMode={editMode} />
             <ProfileRow label="Email" name="email" value={profile.email} onChange={handleChange} editMode={editMode} />
             <ProfileRow label="Fakultas" name="fakultas" value={profile.fakultas} onChange={handleChange} editMode={editMode} />
             <ProfileRow label="Program Studi" name="program_studi" value={profile.program_studi} onChange={handleChange} editMode={editMode} />
 
-            <button
-              className="mt-6 flex items-center gap-2 text-red-600 hover:underline font-semibold"
-              onClick={toggleEdit}
-            >
-              {editMode ? <Save size={18} /> : <Pencil size={18} />}
-              {editMode ? 'Save Profile' : 'Edit Profile'}
-            </button>
+           <button
+  className="mt-6 flex items-center gap-2 text-red-600 hover:text-white hover:bg-red-600 border border-red-600 px-4 py-2 rounded-md transition-all duration-200 font-semibold"
+  onClick={toggleEdit}
+>
+  {editMode ? <Save size={18} /> : <Pencil size={18} />}
+  {editMode ? 'Save Profile' : 'Edit Profile'}
+</button>
           </div>
         </div>
       </main>
@@ -183,7 +183,7 @@ const ProfilePage = () => {
 function ProfileRow({ label, name, value, onChange, editMode }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-      <span className="min-w-[130px] font-semibold text-gray-700">{label} :</span>
+      <span className="min-w-[130px] font-semibold text-red-700">{label} :</span>
       {editMode ? (
         <input
           type="text"
@@ -194,9 +194,9 @@ function ProfileRow({ label, name, value, onChange, editMode }) {
           className="bg-white border border-gray-300 px-4 py-2 rounded-md text-gray-800 w-full max-w-md"
         />
       ) : (
-        <span className="bg-gray-300 px-4 py-2 rounded-md text-gray-800 w-full sm:w-auto">
-          {value || <span className="text-gray-400 italic">Not provided</span>}
-        </span>
+  <span className="bg-pink-50 px-4 py-2 rounded-md text-gray-800 w-full shadow-sm border border-red-500">
+  {value || <span className="text-gray-400 italic">Not provided</span>}
+</span>
       )}
     </div>
   );

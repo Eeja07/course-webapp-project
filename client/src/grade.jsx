@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { PlusCircle, Pencil, Trash2, Send, RefreshCw } from "lucide-react";
+import React, { useState, useEffect, useRef} from "react";
+import { PlusCircle, Pencil, Trash2, Send, RefreshCw, MoreVertical} from "lucide-react";
 import Sidebar from "./sidebar";
 import Header from "./header";
 import axios from 'axios';
@@ -21,12 +21,30 @@ const Grade = () => {
     const [fetched, setFetched] = useState(false);
     const [finalScore, setFinalScore] = useState(null);
     const [predicate, setPredicate] = useState(null);
+    const [showAddMainAspectModal, setShowAddMainAspectModal] = useState(false);
+    const [newMainAspectName, setNewMainAspectName] = useState("");
+    const [addingMainAspect, setAddingMainAspect] = useState(false);
+    const [openMainAspectMenu, setOpenMainAspectMenu] = useState(null);
+    const [showDeleteMainAspectModal, setShowDeleteMainAspectModal] = useState(false);
+    const [pendingDeleteMainAspect, setPendingDeleteMainAspect] = useState(null);
 
-    // 1. Perbarui useEffect untuk memanggil fetchFinalScore saat komponen dimuat
-    useEffect(() => {
-        fetchGradeData();
-        fetchFinalScore(); // Tambahkan ini untuk mengambil nilai akhir saat halaman dimuat
-    }, []);
+   useEffect(() => {
+  // Fetch data
+  fetchGradeData();
+  fetchFinalScore();
+
+  // Handle click outside dropdown
+  const handleClickOutside = (event) => {
+    // Cek kalau bukan klik di elemen yang punya class `aspect-dropdown`
+    if (!event.target.closest(".aspect-dropdown")) {
+      setOpenMainAspectMenu(null);
+    }
+  };
+
+  document.addEventListener("click", handleClickOutside);
+  return () => document.removeEventListener("click", handleClickOutside);
+}, []);
+
     const fetchGradeData = async () => {
         setLoading(true);
         try {
@@ -51,42 +69,74 @@ const Grade = () => {
                 const newColumns = [];
                 const newScores = {};
 
-                // Loop setiap section (penguasaan_materi, celah_keamanan, etc)
                 Object.entries(data).forEach(([sectionKey, sectionData]) => {
-                    // Ubah key jadi Title Case
-                    const title = sectionKey
-                        .split('_')
-                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                        .join(' ');
+                const aspects = Object.keys(sectionData)
+                .filter(key => !['id', 'user_id', 'created_at', 'updated_at'].includes(key));
 
-                    const aspects = Object.keys(sectionData)
-                        .filter(key => !['id', 'user_id', 'created_at', 'updated_at'].includes(key)) // filter metadata field
-                        .map(key => key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')); // Title Case
+                newColumns.push({ title: sectionKey, aspects }); // tanpa ubah ke Title Case
 
-                    newColumns.push({ title, aspects });
+                aspects.forEach(aspectKey => {
+                newScores[`${sectionKey}-${aspectKey}`] = sectionData[aspectKey]?.toString() || '';
+                });
 
-                    // Set nilai awal skor
-                    aspects.forEach(aspect => {
-                        const aspectKeySnake = aspect.toLowerCase().replace(/\s+/g, "_");
-                        newScores[`${title}-${aspect}`] = sectionData[aspectKeySnake]?.toString() || '';
-                    });
                 });
 
                 setColumns(newColumns);
                 setScores(newScores);
+            } else {
+                console.log("No data found, setting empty structure");
+                setColumns([]);
+                setScores({});
             }
         } catch (error) {
             console.error('Error fetching grade data:', error);
             if (error.response && error.response.status !== 404) {
                 alert("Error loading data: " + (error.response?.data?.message || error.message));
+            } else {
+                console.log("No assessment data found yet (404)");
+                setColumns([]);
+                setScores({});
             }
         } finally {
             setLoading(false);
         }
+
         setFetched(true);
         setTimeout(() => setFetched(false), 5000);
     };
 
+
+    const fetchFinalScore = async () => {
+        try {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                console.error('No authentication token found');
+                return;
+            }
+
+            const response = await axios.get('/api/final-grades', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            console.log('Final score data:', response.data);
+
+            if (response.data && response.data.data) {
+                // Update state dengan data dari API
+                setFinalScore(response.data.data.finalScore);
+                setPredicate(response.data.data.predicate);
+            }
+        } catch (error) {
+            console.error('Error fetching final score:', error);
+            // Jika error 404, set nilai ke null (belum dihitung)
+            if (error.response?.status === 404) {
+                setFinalScore(null);
+                setPredicate(null);
+            }
+        }
+    };
 
     const resetModalState = () => {
         setCurrentColIndex(null);
@@ -118,56 +168,57 @@ const Grade = () => {
         resetModalState();
     };
 
-    const handleAddAspect = async () => {
-        if (newAspectName.trim() === "" || currentColIndex === null) {
-            alert("Please enter a valid name for the sub-aspect.");
+   const handleAddAspect = async () => {
+    const trimmed = newAspectName.trim();
+    if (!trimmed || currentColIndex === null) {
+        alert("Please enter a valid sub-aspect name.");
+        return;
+    }
+
+    const existingAspects = columns[currentColIndex]?.aspects || [];
+    const isDuplicate = existingAspects.some(aspect => aspect.toLowerCase() === trimmed.toLowerCase());
+    if (isDuplicate) {
+        alert("Sub-aspect name already exists in this main aspect. Please use a different name.");
+        return;
+    }
+
+    setSchemaModificationLoading(true);
+    
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert("You must be logged in.");
             return;
         }
 
-        setSchemaModificationLoading(true);
+        const categoryTitle = columns[currentColIndex].title;
 
-        try {
-            // Get the authentication token from localStorage
-            const token = localStorage.getItem('token');
-
-            if (!token) {
-                console.error('No authentication token found');
-                alert("You must be logged in to modify the schema.");
-                setSchemaModificationLoading(false);
-                return;
+        await axios.post('/api/schema/add-column', {
+            categoryTitle: categoryTitle,
+            aspectName: trimmed
+        }, {
+            headers: {
+                Authorization: `Bearer ${token}`
             }
+        });
 
-            // Call the API to add a new column to the database
-            const response = await axios.post(
-                '/api/schema/add-column',
-                {
-                    categoryTitle: columns[currentColIndex].title,
-                    aspectName: newAspectName.trim()
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                }
-            );
+        const updatedColumns = [...columns];
+        updatedColumns[currentColIndex].aspects.push(trimmed);
+        setColumns(updatedColumns);
+        setScores(prev => ({
+            ...prev,
+            [`${categoryTitle}-${trimmed}`]: '0'
+        }));
 
-            console.log('Add column response:', response.data);
-
-            // Update the local state
-            const updatedColumns = [...columns];
-            updatedColumns[currentColIndex].aspects.push(newAspectName.trim());
-            setColumns(updatedColumns);
-            closeModal(setShowAddModal);
-
-            // Success message
-            alert(`New sub-aspect "${newAspectName.trim()}" has been added successfully.`);
-        } catch (error) {
-            console.error('Error adding column:', error);
-            alert("Error adding sub-aspect: " + (error.response?.data?.message || error.message));
-        } finally {
-            setSchemaModificationLoading(false);
-        }
-    };
+        alert("Sub-aspect added successfully.");
+        closeModal(setShowAddModal);
+    } catch (error) {
+        console.error("Error adding sub-aspect:", error);
+        alert("Failed to add sub-aspect: " + (error.response?.data?.message || error.message));
+    } finally {
+        setSchemaModificationLoading(false);
+    }
+};
 
     const handleEditAspect = async () => {
         if (newAspectName.trim() === "" || currentColIndex === null || currentAspectIndex === null) {
@@ -236,58 +287,54 @@ const Grade = () => {
     };
 
     const handleDeleteAspect = async () => {
-        if (currentColIndex === null || currentAspectIndex === null) {
-            alert("Cannot identify the sub-aspect to delete.");
+    if (currentColIndex === null || currentAspectIndex === null) {
+        alert("Cannot identify the sub-aspect to delete.");
+        return;
+    }
+
+    const aspectName = columns[currentColIndex].aspects[currentAspectIndex];
+    const totalAspects = columns[currentColIndex].aspects.length;
+
+    if (totalAspects <= 1) {
+        alert("Each main aspect must have at least one sub-aspect.");
+        return;
+    }
+
+    setSchemaModificationLoading(true);
+
+    try {
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+            console.error('No authentication token found');
+            alert("You must be logged in to modify the schema.");
+            setSchemaModificationLoading(false);
             return;
         }
 
-        setSchemaModificationLoading(true);
-
-        const aspectName = columns[currentColIndex].aspects[currentAspectIndex];
-
-        try {
-            // Get the authentication token from localStorage
-            const token = localStorage.getItem('token');
-
-            if (!token) {
-                console.error('No authentication token found');
-                alert("You must be logged in to modify the schema.");
-                setSchemaModificationLoading(false);
-                return;
+        await axios.delete('/api/schema/delete-column', {
+            headers: {
+                Authorization: `Bearer ${token}`
+            },
+            data: {
+                categoryTitle: columns[currentColIndex].title,
+                aspectName: aspectName
             }
+        });
 
-            // Call the API to delete the column from the database
-            const response = await axios.delete(
-                '/api/schema/delete-column',
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    },
-                    data: {
-                        categoryTitle: columns[currentColIndex].title,
-                        aspectName: aspectName
-                    }
-                }
-            );
+        const updatedColumns = [...columns];
+        updatedColumns[currentColIndex].aspects.splice(currentAspectIndex, 1);
+        setColumns(updatedColumns);
 
-            console.log('Delete column response:', response.data);
+        const key = `${columns[currentColIndex].title}-${aspectName}`;
+        if (scores[key] !== undefined) {
+            const updatedScores = { ...scores };
+            delete updatedScores[key];
+            setScores(updatedScores);
+        }
 
-            // Update the local state
-            const updatedColumns = [...columns];
-            updatedColumns[currentColIndex].aspects.splice(currentAspectIndex, 1);
-            setColumns(updatedColumns);
+        closeModal(setShowDeleteModal);
 
-            // Remove the score if it exists
-            const key = `${columns[currentColIndex].title}-${aspectName}`;
-            if (scores[key] !== undefined) {
-                const updatedScores = { ...scores };
-                delete updatedScores[key];
-                setScores(updatedScores);
-            }
-
-            closeModal(setShowDeleteModal);
-
-            // Success message
             alert(`Sub-aspect "${aspectName}" has been deleted successfully.`);
         } catch (error) {
             console.error('Error deleting column:', error);
@@ -296,6 +343,63 @@ const Grade = () => {
             setSchemaModificationLoading(false);
         }
     };
+
+
+    const handleDeleteMainAspect = async () => {
+        if (currentColIndex === null) {
+            alert("Cannot identify the main aspect to delete.");
+            return;
+        }
+
+        const mainAspectTitle = columns[currentColIndex].title;
+
+        setSchemaModificationLoading(true);
+
+        try {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+            alert("You must be logged in to modify the schema.");
+            setSchemaModificationLoading(false);
+            return;
+            }
+
+            await axios.delete('/api/schema/delete-aspect', {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+            data: {
+                categoryTitle: mainAspectTitle,
+            },
+            });
+
+            // Update state
+            const updatedColumns = [...columns];
+            updatedColumns.splice(currentColIndex, 1);
+            setColumns(updatedColumns);
+
+            const updatedScores = { ...scores };
+            Object.keys(updatedScores).forEach((key) => {
+            if (key.startsWith(`${mainAspectTitle}-`)) {
+                delete updatedScores[key];
+            }
+            });
+            setScores(updatedScores);
+
+            // Reset state
+            setShowDeleteMainAspectModal(false);
+            setPendingDeleteMainAspect(null);
+            setCurrentColIndex(null);
+            alert(`Main aspect "${mainAspectTitle}" deleted successfully.`);
+        } catch (error) {
+            console.error('Error deleting main aspect:', error);
+            alert("Error deleting main aspect: " + (error.response?.data?.message || error.message));
+        } finally {
+            setSchemaModificationLoading(false);
+        }
+        };
+
+
 
     const validateScores = () => {
         // Check all scores are provided and valid
@@ -318,88 +422,72 @@ const Grade = () => {
     };
 
     const handleSubmit = async () => {
-        // Validate the form data
-        const emptyFields = validateScores();
+    const emptyFields = validateScores();
 
-        if (emptyFields.length > 0) {
-            setInvalidFields(emptyFields);
-            alert("All fields must be filled with valid numbers before submitting!");
+    if (emptyFields.length > 0) {
+        setInvalidFields(emptyFields);
+        alert("All fields must be filled with valid numbers before submitting!");
+        return;
+    }
+
+    setInvalidFields([]);
+    setLoading(true);
+
+    const formattedData = {};
+
+    columns.forEach(col => {
+        const categoryKey = col.title; // langsung pakai snake_case
+        formattedData[categoryKey] = {};
+
+        col.aspects.forEach(aspect => {
+            const scoreKey = `${categoryKey}-${aspect}`;
+            formattedData[categoryKey][aspect] = parseInt(scores[scoreKey], 10);
+        });
+    });
+
+    const payload = {
+        parameter: "sistem_manajemen_basis_data",
+        data: formattedData,
+    };
+
+    try {
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+            console.error('No authentication token found');
+            alert("You must be logged in to submit grades.");
+            setLoading(false);
             return;
         }
 
-        setInvalidFields([]);
-        setLoading(true);
-
-        // Create a structured payload from the scores
-        const formattedData = {};
-
-        columns.forEach(col => {
-            const categoryKey = col.title.toLowerCase().replace(/\s+/g, "_");
-            formattedData[categoryKey] = {};
-
-            col.aspects.forEach(aspect => {
-                const aspectKey = aspect.toLowerCase().replace(/\s+/g, "_");
-                const scoreKey = `${col.title}-${aspect}`;
-                formattedData[categoryKey][aspectKey] = parseInt(scores[scoreKey], 10);
-            });
+        const response = await axios.post('/api/grade-submit', payload, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
         });
 
-        const payload = {
-            parameter: "Sistem Manajemen Basis Data",
-            data: formattedData,
-        };
+        console.log('Submit successful:', response.data);
 
-        try {
-            const token = localStorage.getItem('token');
-
-            if (!token) {
-                console.error('No authentication token found');
-                alert("You must be logged in to submit grades.");
-                setLoading(false);
-                return;
+        const finalScoreRes = await axios.get('/api/final-grades', {
+            headers: {
+                Authorization: `Bearer ${token}`
             }
+        });
 
-            // Submit grades data
-            const response = await axios.post('/api/grade-submit', payload, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
+        console.log('Final score:', finalScoreRes.data);
 
-            console.log('Submit successful:', response.data);
+        await fetchFinalScore();
+        alert("Data submitted successfully!");
+        setSubmitted(true);
+        setTimeout(() => setSubmitted(false), 5000);
+    } catch (error) {
+        console.error('Submit failed:', error);
+        alert("Error submitting data: " + (error.response?.data?.message || error.message));
+    } finally {
+        setLoading(false);
+    }
+};
 
-            // Calculate final grade
-            const finalGradeResponse = await axios.get('/api/grades/final', {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
-            console.log('Final grade calculation:', finalGradeResponse.data);
-
-            const finalScore = await axios.get('/api/final-grades', {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-            console.log('Final score:', finalScore.data);
-
-
-            await fetchFinalScore(); // Refresh final score after submission
-            // Optional: Show success message
-            alert("Data submitted successfully!");
-            setSubmitted(true);
-            setTimeout(() => setSubmitted(false), 5000);
-
-        } catch (error) {
-            console.error('Submit failed:', error);
-            alert("Error submitting data: " + (error.response?.data?.message || error.message));
-        } finally {
-            setLoading(false);
-        }
-    };
-    // Langkah 3: Panggil fungsi saat komponen dimuat 
-    // (letakkan kode ini di dalam useEffect)
     // Helper function to determine if a field is invalid
     const isFieldInvalid = (key) => invalidFields.includes(key);
 
@@ -416,38 +504,55 @@ const Grade = () => {
             setInvalidFields(prev => prev.filter(field => field !== key));
         }
     };
-    // Tambahkan fungsi fetchFinalScore setelah fungsi fetchGradeData
-    const fetchFinalScore = async () => {
-        try {
-            const token = localStorage.getItem('token');
 
-            if (!token) {
-                console.error('No authentication token found');
-                return;
-            }
+    // FIXED: Use correct endpoint for adding main aspects
+   const handleAddMainAspect = async () => {
+    const trimmed = newMainAspectName.trim();
+    if (!trimmed) {
+        alert("Enter a valid aspect name.");
+        return;
+    }
 
-            const response = await axios.get('/api/final-grades', {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
+    const isDuplicate = columns.some(col => col.title.toLowerCase() === trimmed.toLowerCase());
+    if (isDuplicate) {
+        alert("Main aspect name already exists. Please use a different name.");
+        return;
+    }
 
-            console.log('Final score data:', response.data);
+    setAddingMainAspect(true);
 
-            if (response.data && response.data.data) {
-                // Update state dengan data dari API
-                setFinalScore(response.data.data.finalScore);
-                setPredicate(response.data.data.predicate);
-            }
-        } catch (error) {
-            console.error('Error fetching final score:', error);
-            // Jika error 404, set nilai ke null (belum dihitung)
-            if (error.response?.status === 404) {
-                setFinalScore(null);
-                setPredicate(null);
-            }
+    try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+            alert("You must be logged in.");
+            return;
         }
-    };
+
+        await axios.post("/api/schema/add-parameter", {
+            parameterName: trimmed
+        }, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+
+        const newColumn = { title: trimmed, aspects: ["Sub-aspek 1"] };
+        setColumns(prev => [...prev, newColumn]);
+        setScores(prev => ({
+            ...prev,
+            [`${trimmed}-Sub-aspek 1`]: "0"
+        }));
+
+        alert("Main aspect added successfully.");
+        setShowAddMainAspectModal(false);
+        setNewMainAspectName("");
+    } catch (error) {
+        console.error(error);
+        alert("Failed to add main aspect: " + (error.response?.data?.message || error.message));
+    } finally {
+        setAddingMainAspect(false);
+    }
+};
 
     return (
         <div className="bg-gray-100 min-h-screen pt-16">
@@ -498,17 +603,61 @@ const Grade = () => {
                         </div>
                     )}
 
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold text-gray-800">Grade Aspects</h2>
+                        <button
+                            onClick={() => setShowAddMainAspectModal(true)}
+            className="border border-red-500 text-red-500 px-4 py-2 rounded-md hover:text-white hover:bg-red-500 transition text-sm"
+                        >
+                            + Add Main Aspect
+                        </button>
+                    </div>
 
                     {columns.length === 0 && !loading && (
                         <div className="text-center py-8 text-gray-500">
-                            No assessment parameters found. Please refresh or contact administrator.
+                            No assessment parameters found. Click "Add Main Aspect" to get started.
                         </div>
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {columns.map((col, colIndex) => (
                             <div key={colIndex} className="mb-4">
-                                <h2 className="text-center font-semibold mb-3">{col.title}</h2>
+                            <div className="mb-4 p-3 rounded-lg border border-gray-300 bg-red-50 shadow-sm relative">
+  <div className="flex justify-between items-center">
+    <h2 className="font-semibold text-red-800 text-base">
+      {col.title}
+    </h2>
+
+    <div className="relative">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpenMainAspectMenu(openMainAspectMenu === col.title ? null : col.title);
+        }}
+        className="text-red-700 hover:text-red-900"
+      >
+        <MoreVertical size={18} />
+      </button>
+
+      {openMainAspectMenu === col.title && (
+        <div className="absolute right-0 mt-2 w-40 bg-white border rounded shadow-md z-50">
+          <button
+            onClick={() => {
+                setOpenMainAspectMenu(null);
+                setCurrentColIndex(colIndex); // <-- WAJIB ditambahkan ini!
+                setPendingDeleteMainAspect(col.title); 
+                setShowDeleteMainAspectModal(true);
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-100"
+          >
+            Delete Main Aspect
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
                                 {col.aspects.map((aspect, i) => {
                                     const scoreKey = `${col.title}-${aspect}`;
                                     return (
@@ -695,7 +844,92 @@ const Grade = () => {
                     </div>
                 </div>
             )}
-        </div>
+
+            {/* Add Main Aspect Modal */}
+            {showAddMainAspectModal && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                    <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
+                        <h2 className="text-xl font-bold text-red-600 mb-4">Add Main Aspect</h2>
+                        <input
+                            type="text"
+                            placeholder="Main Aspect Name"
+                            value={newMainAspectName}
+                            onChange={(e) => setNewMainAspectName(e.target.value)}
+                            className="w-full px-3 py-2 border rounded mb-5 border-gray-500"
+                            disabled={addingMainAspect}
+                            autoFocus
+                        />
+                        <div className="flex justify-center space-x-4">
+                            <button
+                                onClick={() => {
+                                    setShowAddMainAspectModal(false);
+                                    setNewMainAspectName("");
+                                }}
+                                className="px-6 py-2 border border-gray-400 text-gray-800 rounded-md hover:bg-red-100 transition-all"
+                                disabled={addingMainAspect}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAddMainAspect}
+                                className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-all"
+                                disabled={addingMainAspect}
+                            >
+                                {addingMainAspect ? (
+                                    <>
+                                        <RefreshCw size={16} className="animate-spin inline mr-2" />
+                                        Adding...
+                                    </>
+                                ) : (
+                                    "Add"
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
+{showDeleteMainAspectModal && (
+  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+    <div className="bg-white rounded-lg shadow-lg p-6 w-80 text-center">
+      <h2 className="text-xl font-bold text-red-600 mb-4">Delete Main Aspect</h2>
+      <p className="text-gray-800 mb-5">
+        Are you sure you want to delete the main aspect{" "}
+        <span className="font-semibold text-red-500">{pendingDeleteMainAspect}</span>?<br />
+        This will also remove all of its sub-aspects.
+      </p>
+      <div className="flex justify-center space-x-4">
+        <button
+          onClick={() => {
+            setShowDeleteMainAspectModal(false);
+            setPendingDeleteMainAspect(null);
+            setCurrentColIndex(null); // reset
+          }}
+          className="px-6 py-2 border border-gray-800 text-gray-800 rounded-md hover:bg-red-100 transition-all"
+          disabled={schemaModificationLoading}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleDeleteMainAspect}
+          className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-all"
+          disabled={schemaModificationLoading}
+        >
+          {schemaModificationLoading ? (
+            <>
+              <RefreshCw size={16} className="animate-spin inline mr-2" />
+              Deleting...
+            </>
+          ) : "Delete"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+    </div>
     );
 };
 

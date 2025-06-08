@@ -27,8 +27,8 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Debug static files setup
-console.log(`Serving static files from: ${uploadsDir}`);
-console.log(`Files will be accessible at: http://localhost:4000/uploads/filename.jpg`);
+// console.log(`Serving static files from: ${uploadsDir}`);
+// console.log(`Files will be accessible at: http://localhost:4000/uploads/filename.jpg`);
 
 // Import database configuration
 const pool = require('./config/db');
@@ -51,13 +51,11 @@ scheduleCleanup();
 // Import routes
 const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profile');
-const schemaRoutes = require('./routes/schema');
 const gradesRoutes = require('./routes/grades');
 
 // Mount routes
 app.use('/api', authRoutes);
 app.use('/api', profileRoutes);
-app.use('/api/schema', schemaRoutes);
 app.use('/api', gradesRoutes);
 
 // Add a test endpoint to verify static file serving

@@ -19,7 +19,7 @@ const cleanupUnusedUploads = async () => {
       }
     });
 
-    console.log(`Found ${databaseFiles.size} profile photos in database`);
+    // console.log(`Found ${databaseFiles.size} profile photos in database`);
 
     // Read all files from uploads directory
     fs.readdir(uploadsDir, (err, files) => {
@@ -49,7 +49,7 @@ const cleanupUnusedUploads = async () => {
       });
     });
 
-    console.log('Cleanup complete');
+    // console.log('Cleanup complete');
   } catch (error) {
     console.error('Error during uploads cleanup:', error);
   }

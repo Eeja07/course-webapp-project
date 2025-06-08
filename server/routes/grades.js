@@ -1,441 +1,293 @@
+
 // routes/grades.js - Grading system routes
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
-const { aspectToColumnName, quoteIdentifier } = require('../utils/columnHelpers');
 
-// Submit grades dengan perbaikan untuk debugging
 router.post('/grade-submit', authenticateToken, async (req, res) => {
   console.log('==== GRADE SUBMISSION DEBUG ====');
   console.log('Request body:', JSON.stringify(req.body, null, 2));
-  console.log('User ID from token:', req.user.id);
-  console.log('User ID type:', typeof req.user.id);
-  
-  const { parameter, data } = req.body;
   const userId = req.user.id;
-
-  console.log('Parameter:', parameter);
-  console.log('Data keys received:', Object.keys(data));
+  const { parameter, data } = req.body;
 
   if (!parameter || !data) {
-    console.log('Missing required fields: parameter or data is missing');
     return res.status(400).json({ message: 'Parameter and data are required' });
   }
 
   try {
-    // Start a transaction
-    console.log('Beginning transaction...');
     await pool.query('BEGIN');
 
-    // Debug the database connection
-    try {
-      const testQuery = await pool.query('SELECT NOW()');
-      console.log('Database connection test successful:', testQuery.rows[0]);
-    } catch (dbError) {
-      console.error('Database connection test failed:', dbError);
-      await pool.query('ROLLBACK');
-      return res.status(500).json({ 
-        message: 'Database connection error', 
-        error: dbError.message 
-      });
-    }
+    for (const [categoryKey, aspectData] of Object.entries(data)) {
+      const parameterName = categoryKey; // pakai snake_case langsung
 
-    // Group submitted data by category
-    const categorizedData = {};
-    for (const categoryKey in data) {
-      if (Object.prototype.hasOwnProperty.call(data, categoryKey)) {
-        categorizedData[categoryKey] = data[categoryKey];
-      }
-    }
-    
-    console.log('Categorized data:', JSON.stringify(categorizedData, null, 2));
-    
-    // Map categories to table names
-    const categoryTableMap = {
-      'penguasaan_materi': 'penguasaan_materi',
-      'celah_keamanan': 'celah_keamanan',
-      'fitur_utama': 'fitur_utama',
-      'fitur_pendukung': 'fitur_pendukung'
-    };
-    
-    // Process each category
-    for (const [category, aspectData] of Object.entries(categorizedData)) {
-      const tableName = categoryTableMap[category];
-      if (!tableName) {
-        console.log(`Skipping unknown category: ${category}`);
-        continue;
-      }
-      
-      console.log(`Processing ${category} (table: ${tableName})...`);
-      console.log(`Data for ${category}:`, JSON.stringify(aspectData, null, 2));
-      
-      // Get existing columns from the database
-      const columnsQuery = await pool.query(
-        `SELECT column_name FROM information_schema.columns 
-         WHERE table_name = $1 AND column_name NOT IN ('id', 'user_id', 'created_at', 'updated_at')`,
-        [tableName]
-      );
-      
-      const existingColumns = columnsQuery.rows.map(row => row.column_name);
-      console.log(`Existing columns for ${tableName}:`, existingColumns);
-      
-      // Check if record exists for this user
-      const quotedTableName = quoteIdentifier(tableName);
-      const checkQuery = `SELECT * FROM ${quotedTableName} WHERE user_id = $1`;
-      const checkResult = await pool.query(checkQuery, [userId]);
-      
-      console.log(`Check result for ${tableName}:`, checkResult.rows.length > 0 ? 'Record exists' : 'No record found');
-      
-      if (checkResult.rows.length === 0) {
-        // Insert new record with dynamic columns
-        console.log(`Creating new record in ${tableName}...`);
-        
-        // Build the SQL query dynamically
-        const columns = ['user_id'];
-        const values = [userId];
-        const placeholders = ['$1'];
-        let paramIndex = 2;
-        
-        // Add each column with proper quoting to handle reserved words
-        for (const [colName, colValue] of Object.entries(aspectData)) {
-          columns.push(quoteIdentifier(colName));
-          values.push(colValue);
-          placeholders.push(`$${paramIndex++}`);
-        }
-        
-        const insertQuery = `
-          INSERT INTO ${quotedTableName} (${columns.join(', ')})
-          VALUES (${placeholders.join(', ')})
-          RETURNING *
-        `;
-        
-        console.log('Insert query:', insertQuery);
-        console.log('Insert values:', values);
-        
-        const insertResult = await pool.query(insertQuery, values);
-        console.log(`Insert successful, returned rows:`, insertResult.rows.length);
-      } else {
-        // Update existing record with dynamic columns
-        console.log(`Updating existing record in ${tableName}...`);
-        
-        // Build the SQL query dynamically with proper quoting
-        const setClauses = [];
-        const values = [userId]; // First parameter is user_id for WHERE clause
-        let paramIndex = 2;
-        
-        for (const [colName, colValue] of Object.entries(aspectData)) {
-          setClauses.push(`${quoteIdentifier(colName)} = $${paramIndex++}`);
-          values.push(colValue);
-        }
-        
-        const updateQuery = `
-          UPDATE ${quotedTableName}
-          SET ${setClauses.join(', ')}
-          WHERE user_id = $1
-          RETURNING *
-        `;
-        
-        console.log('Update query:', updateQuery);
-        console.log('Update values:', values);
-        
-        const updateResult = await pool.query(updateQuery, values);
-        console.log(`Update successful, affected rows:`, updateResult.rows.length);
-      }
-    }
+      for (const [aspectKey, nilai] of Object.entries(aspectData)) {
+        const subAspekNama = aspectKey; // snake_case langsung
+        const subAspekNilai = parseInt(nilai, 10) || 0;
 
-    // Calculate and save the final score
-    console.log('Calculating final score...');
-    
-    // Collect all scores from all tables
-    let allScores = [];
-    
-    for (const table of Object.values(categoryTableMap)) {
-      // Get column names
-      const columnsResult = await pool.query(
-        `SELECT column_name FROM information_schema.columns 
-         WHERE table_name = $1 AND column_name NOT IN ('id', 'user_id', 'created_at', 'updated_at')`,
-        [table]
-      );
-      
-      const columns = columnsResult.rows.map(row => row.column_name);
-      console.log(`Retrieved columns for ${table}:`, columns);
-      
-      if (columns.length > 0) {
-        // Build query to get values
-        const quotedColumns = columns.map(col => quoteIdentifier(col));
-        const selectClause = quotedColumns.join(', ');
-        const quotedTableName = quoteIdentifier(table);
-        
-        const query = `SELECT ${selectClause} FROM ${quotedTableName} WHERE user_id = $1`;
-        console.log(`Query to get values from ${table}:`, query);
-        
-        const result = await pool.query(query, [userId]);
-        console.log(`Result rows from ${table}:`, result.rows.length);
-        
-        if (result.rows.length > 0) {
-          // Add values to the scores array
-          const rowValues = Object.values(result.rows[0]);
-          console.log(`Values from ${table}:`, rowValues);
-          allScores = allScores.concat(rowValues);
+        // Cek apakah data sudah ada
+        const existing = await pool.query(
+          `SELECT id FROM penilaian WHERE user_id = $1 AND parameter_penilaian_nama = $2 AND sub_aspek_nama = $3`,
+          [userId, parameterName, subAspekNama]
+        );
+
+        if (existing.rows.length > 0) {
+          await pool.query(
+            `UPDATE penilaian 
+             SET sub_aspek_nilai = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE user_id = $2 AND parameter_penilaian_nama = $3 AND sub_aspek_nama = $4`,
+            [subAspekNilai, userId, parameterName, subAspekNama]
+          );
+        } else {
+          await pool.query(
+            `INSERT INTO penilaian 
+             (user_id, parameter_penilaian_nama, sub_aspek_nama, sub_aspek_nilai)
+             VALUES ($1, $2, $3, $4)`,
+            [userId, parameterName, subAspekNama, subAspekNilai]
+          );
         }
       }
     }
-    
-    console.log('All scores collected:', allScores);
-    
-    // Calculate final score
-    let totalErrors = 0;
-    allScores.forEach(value => {
-      const numValue = parseInt(value, 10) || 0;
-      console.log(`Adding value to total errors: ${value} (as number: ${numValue})`);
-      totalErrors += numValue;
-    });
-    
-    const finalScore = Math.max(90 - totalErrors, 0);
-    console.log(`Total errors: ${totalErrors}, Final score: ${finalScore}`);
-    
-    // Determine predicate
-    let predicate = '';
-    if (finalScore >= 86) predicate = 'A';
-    else if (finalScore >= 76) predicate = 'AB';
-    else if (finalScore >= 66) predicate = 'B';
-    else if (finalScore >= 61) predicate = 'BC';
-    else if (finalScore >= 56) predicate = 'C';
-    else if (finalScore >= 41) predicate = 'D';
-    else predicate = 'E';
-    
-    console.log(`Final score: ${finalScore}, Predicate: ${predicate}`);
-    
-    // Save to nilai_akhir table
-    try {
-      // Periksa struktur tabel nilai_akhir
-      const tableInfoQuery = await pool.query(`
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_name = 'nilai_akhir'
-      `);
-      console.log('Struktur tabel nilai_akhir:', tableInfoQuery.rows);
-      
-      const existingScore = await pool.query(
-        'SELECT id FROM nilai_akhir WHERE user_id = $1',
-        [userId]
-      );
-      
-      console.log('Existing score check result:', existingScore.rows.length > 0 ? 'Score exists' : 'No score found');
-      console.log('userId yang digunakan untuk query:', userId);
-      
-      if (existingScore.rows.length > 0) {
-        console.log('Updating existing final score...');
-        const updateScoreQuery = `
-          UPDATE nilai_akhir 
-          SET nilai_akhir = $1, predikat = $2, updated_at = CURRENT_TIMESTAMP
-          WHERE user_id = $3
-          RETURNING *
-        `;
-        console.log('Update score query:', updateScoreQuery);
-        console.log('Update score params:', [finalScore, predicate, userId]);
-        
-        const updateResult = await pool.query(updateScoreQuery, [finalScore, predicate, userId]);
-        console.log('Update score result:', updateResult.rows[0]);
-      } else {
-        console.log('Inserting new final score...');
-        const insertScoreQuery = `
-          INSERT INTO nilai_akhir (user_id, nilai_akhir, predikat)
-          VALUES ($1, $2, $3)
-          RETURNING *
-        `;
-        console.log('Insert score query:', insertScoreQuery);
-        console.log('Insert score params:', [userId, finalScore, predicate]);
-        
-        const insertResult = await pool.query(insertScoreQuery, [userId, finalScore, predicate]);
-        console.log('Insert score result:', insertResult.rows[0]);
-      }
-    } catch (scoreError) {
-      console.error('Error saving score to nilai_akhir:', scoreError);
-      console.error('Error detail:', scoreError.detail);
-      console.error('Error code:', scoreError.code);
-      throw scoreError; // Re-throw to handle in outer catch block
-    }
-
-    // Commit the transaction
-    console.log('All operations successful, committing transaction...');
-    await pool.query('COMMIT');
-    console.log('Transaction committed successfully');
-
-    console.log('Grade submission completed successfully!');
-    res.status(200).json({
-      message: 'Assessment data saved successfully',
-      finalScore: finalScore,
-      predicate: predicate
-    });
-  } catch (error) {
-    // Rollback in case of error
-    console.error('ERROR in grade submission:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    
-    try {
-      console.log('Rolling back transaction...');
-      await pool.query('ROLLBACK');
-      console.log('Rollback successful');
-    } catch (rollbackError) {
-      console.error('Error during rollback:', rollbackError);
-    }
-    
-    res.status(500).json({ 
-      message: 'Failed to save assessment data', 
-      error: error.message,
-      details: error.detail || 'No additional details available'
-    });
-  }
-});
-router.get('/grades/final', authenticateToken, async (req, res) => {
-  const userId = req.user.id;
-  try {
-    // Mendefinisikan tabel yang akan diquery
-    const tables = [
-      { name: 'penguasaan_materi', key: 'penguasaan_materi' },
-      { name: 'celah_keamanan', key: 'celah_keamanan' },
-      { name: 'fitur_utama', key: 'fitur_utama' },
-      { name: 'fitur_pendukung', key: 'fitur_pendukung' }
-    ];
-    
-    // Menginisialisasi array untuk menyimpan semua nilai
-    let allScores = [];
-    
-    // Query setiap tabel untuk mendapatkan nilai
-    for (const table of tables) {
-      // Pertama dapatkan nama kolom dari database (kecuali kolom id, user_id, created_at, updated_at)
-      const columnsResult = await pool.query(
-        `SELECT column_name FROM information_schema.columns 
-         WHERE table_name = $1 AND column_name NOT IN ('id', 'user_id', 'created_at', 'updated_at')`,
-        [table.name]
-      );
-      
-      const columns = columnsResult.rows.map(row => row.column_name);
-      
-      if (columns.length > 0) {
-        // Membangun query dinamis untuk mendapatkan hanya nilai dari kolom yang relevan
-        const quotedColumns = columns.map(col => quoteIdentifier(col));
-        const selectClause = quotedColumns.join(', ');
-        const quotedTableName = quoteIdentifier(table.name);
-        
-        const query = `SELECT ${selectClause} FROM ${quotedTableName} WHERE user_id = $1`;
-        const result = await pool.query(query, [userId]);
-        
-        if (result.rows.length > 0) {
-          // Mengambil semua nilai dari baris pertama dan menambahkannya ke array allScores
-          const rowValues = Object.values(result.rows[0]);
-          allScores = allScores.concat(rowValues);
-        }
-      }
-    }
-    
-    // Menghitung nilai akhir
-    let totalErrors = 0;
-    allScores.forEach(value => {
-      // Pastikan nilai dikonversi ke number
-      totalErrors += parseInt(value, 10) || 0;
-    });
-    
-    const finalScore = Math.max(90 - totalErrors, 0);
-    
-    // Menentukan predikat
-    let predicate = '';
-    if (finalScore >= 86) predicate = 'A';
-    else if (finalScore >= 76) predicate = 'AB';
-    else if (finalScore >= 66) predicate = 'B';
-    else if (finalScore >= 61) predicate = 'BC';
-    else if (finalScore >= 56) predicate = 'C';
-    else if (finalScore >= 41) predicate = 'D';
-    else predicate = 'E';
-    
-    // Cek apakah sudah ada nilai akhir untuk user ini
-    const existingScore = await pool.query(
-      'SELECT id FROM nilai_akhir WHERE user_id = $1',
+    // kalkulasi nilai di query 
+    const result = await pool.query(
+      `WITH final AS (
+        SELECT 
+          GREATEST(90 - SUM(sub_aspek_nilai), 0) AS final_score
+        FROM penilaian
+        WHERE user_id = $1
+      )
+      SELECT 
+        final_score,
+        CASE
+          WHEN final_score >= 86 THEN 'A'
+          WHEN final_score >= 76 THEN 'AB'
+          WHEN final_score >= 66 THEN 'B'
+          WHEN final_score >= 61 THEN 'BC'
+          WHEN final_score >= 56 THEN 'C'
+          WHEN final_score >= 41 THEN 'D'
+          ELSE 'E'
+        END AS predicate
+      FROM final;`,
       [userId]
     );
-    
-    let scoreRecord;
-    
-    if (existingScore.rows.length > 0) {
-      // Update nilai yang sudah ada
-      scoreRecord = await pool.query(
-        `UPDATE nilai_akhir 
-         SET nilai_akhir = $1, predikat = $2, updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $3
-         RETURNING *`,
+    const finalScore = parseInt(result.rows[0].final_score) || 0;
+    const predicate = result.rows[0].predicate;
+
+    const checkFinal = await pool.query(
+      `SELECT id FROM nilai_akhir WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (checkFinal.rows.length > 0) {
+      await pool.query(
+        `UPDATE nilai_akhir SET nilai_akhir = $1, predikat = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $3`,
         [finalScore, predicate, userId]
       );
     } else {
-      // Insert nilai baru
-      scoreRecord = await pool.query(
-        `INSERT INTO nilai_akhir (user_id, nilai_akhir, predikat)
-         VALUES ($1, $2, $3)
-         RETURNING *`,
+      await pool.query(
+        `INSERT INTO nilai_akhir (user_id, nilai_akhir, predikat) VALUES ($1, $2, $3)`,
         [userId, finalScore, predicate]
       );
     }
-    
+
+    await pool.query('COMMIT');
+
     res.status(200).json({
-      message: 'Final score calculated and saved successfully',
-      data: {
-        totalErrors,
-        finalScore,
-        predicate,
-        record: scoreRecord.rows[0]
-      }
+      message: 'Assessment data saved successfully',
+      finalScore,
+      predicate
+    });
+
+  } catch (err) {
+    console.error('ERROR in grade submission:', err);
+    await pool.query('ROLLBACK');
+    res.status(500).json({ message: 'Failed to save assessment data', error: err.message });
+  }
+});
+
+// Updated add-parameter endpoint
+router.post('/schema/add-parameter', authenticateToken, async (req, res) => {
+  const { parameterName } = req.body;
+  const userId = req.user.id;
+
+  if (!parameterName) {
+    return res.status(400).json({ message: 'Parameter name is required' });
+  }
+
+  try {
+    // Check if record already exists
+    const existingRecord = await pool.query(
+      `SELECT id FROM penilaian 
+       WHERE user_id = $1 AND parameter_penilaian_nama = $2 AND sub_aspek_nama = $3`,
+      [userId, parameterName, 'Sub-aspek 1']
+    );
+
+    if (existingRecord.rows.length === 0) {
+      // Only insert if it doesn't exist
+      await pool.query(
+        `INSERT INTO penilaian (user_id, parameter_penilaian_nama, sub_aspek_nama, sub_aspek_nilai)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, parameterName, 'Sub-aspek 1', 0]
+      );
+    }
+
+    res.status(200).json({
+      message: 'Parameter added successfully',
+      parameterName
     });
   } catch (error) {
-    console.error('Error calculating and saving final score:', error);
+    console.error('Error adding parameter:', error);
     res.status(500).json({ 
-      message: 'Failed to calculate and save final score', 
+      message: 'Failed to add parameter', 
       error: error.message 
     });
   }
 });
-// Fetch grades
+
+// Updated add-column endpoint
+router.post('/schema/add-column', authenticateToken, async (req, res) => {
+  const { categoryTitle, aspectName } = req.body;
+  const userId = req.user.id;
+
+  if (!categoryTitle || !aspectName) {
+    return res.status(400).json({ message: 'Category title and aspect name are required' });
+  }
+
+  try {
+    // Check if record already exists
+    const existingRecord = await pool.query(
+      `SELECT id FROM penilaian 
+       WHERE user_id = $1 AND parameter_penilaian_nama = $2 AND sub_aspek_nama = $3`,
+      [userId, categoryTitle, aspectName]
+    );
+
+    if (existingRecord.rows.length === 0) {
+      // Only insert if it doesn't exist
+      await pool.query(
+        `INSERT INTO penilaian (user_id, parameter_penilaian_nama, sub_aspek_nama, sub_aspek_nilai)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, categoryTitle, aspectName, 0]
+      );
+    }
+
+    res.status(200).json({
+      message: 'Sub-aspect added successfully',
+      categoryTitle,
+      aspectName
+    });
+  } catch (error) {
+    console.error('Error adding sub-aspect:', error);
+    res.status(500).json({ 
+      message: 'Failed to add sub-aspect', 
+      error: error.message 
+    });
+  }
+});
+
+// Updated add-row endpoint
+router.post('/add-row', authenticateToken, async (req, res) => {
+  const { rowData } = req.body;
+  const userId = req.user.id;
+
+  if (!rowData || typeof rowData !== 'object') {
+    return res.status(400).json({ message: 'Row data is required' });
+  }
+
+  try {
+    await pool.query('BEGIN');
+
+    // Process each key-value pair in rowData
+    for (const [key, value] of Object.entries(rowData)) {
+      // Parse the key format: "Category Title-Sub Aspect Name"
+      const dashIndex = key.lastIndexOf('-');
+      if (dashIndex === -1) {
+        continue; // Skip invalid keys
+      }
+
+      const parameterName = key.substring(0, dashIndex);
+      const subAspectName = key.substring(dashIndex + 1);
+      const subAspectValue = parseInt(value, 10) || 0;
+
+      // Check if record already exists
+      const existingRecord = await pool.query(
+        `SELECT id FROM penilaian 
+         WHERE user_id = $1 AND parameter_penilaian_nama = $2 AND sub_aspek_nama = $3`,
+        [userId, parameterName, subAspectName]
+      );
+
+      if (existingRecord.rows.length > 0) {
+        // Update existing record
+        await pool.query(
+          `UPDATE penilaian 
+           SET sub_aspek_nilai = $1, updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = $2 AND parameter_penilaian_nama = $3 AND sub_aspek_nama = $4`,
+          [subAspectValue, userId, parameterName, subAspectName]
+        );
+      } else {
+        // Insert new record
+        await pool.query(
+          `INSERT INTO penilaian (user_id, parameter_penilaian_nama, sub_aspek_nama, sub_aspek_nilai)
+           VALUES ($1, $2, $3, $4)`,
+          [userId, parameterName, subAspectName, subAspectValue]
+        );
+      }
+    }
+
+    await pool.query('COMMIT');
+
+    res.status(200).json({
+      message: 'Row data added successfully',
+      rowData
+    });
+  } catch (error) {
+    console.error('Error adding row data:', error);
+    await pool.query('ROLLBACK');
+    res.status(500).json({ 
+      message: 'Failed to add row data', 
+      error: error.message 
+    });
+  }
+});
+
+// Fetch grades from unified table - FIXED
 router.get('/grades', authenticateToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // Define the tables to query
-    const tables = [
-      { name: 'penguasaan_materi', key: 'penguasaan_materi' },
-      { name: 'celah_keamanan', key: 'celah_keamanan' },
-      { name: 'fitur_utama', key: 'fitur_utama' },
-      { name: 'fitur_pendukung', key: 'fitur_pendukung' }
-    ];
-    
-    // Initialize the result object
-    const gradesData = {};
-    
-    // Query each table
-    for (const table of tables) {
-      // First get the column names from the database
-      const columnsResult = await pool.query(
-        `SELECT column_name FROM information_schema.columns 
-         WHERE table_name = $1 AND column_name NOT IN ('id', 'user_id', 'created_at', 'updated_at')`,
-        [table.name]
+    // Initialize gradesData object - THIS WAS MISSING
+    let gradesData = {};
+
+    // First, get all parameter names for this user
+    const parametersResult = await pool.query(
+      `SELECT DISTINCT parameter_penilaian_nama 
+       FROM penilaian 
+       WHERE user_id = $1 
+       ORDER BY parameter_penilaian_nama`,
+      [userId]
+    );
+
+    // Process each parameter found in database
+    for (const paramRow of parametersResult.rows) {
+      const parameterName = paramRow.parameter_penilaian_nama;
+      gradesData[parameterName] = {};
+
+      
+      // Get all sub-aspects for this parameter
+      const aspectsResult = await pool.query(
+        `SELECT 
+          sub_aspek_nama,
+          sub_aspek_nilai
+         FROM penilaian 
+         WHERE user_id = $1 AND parameter_penilaian_nama = $2
+         ORDER BY sub_aspek_nama`,
+        [userId, parameterName]
       );
-      
-      const columns = columnsResult.rows.map(row => row.column_name);
-      
-      if (columns.length > 0) {
-        // Build a dynamic query to select only existing columns
-        const quotedColumns = ['id', 'user_id', ...columns].map(col => quoteIdentifier(col));
-        const selectClause = quotedColumns.join(', ');
-        const quotedTableName = quoteIdentifier(table.name);
-        
-        const query = `SELECT ${selectClause} FROM ${quotedTableName} WHERE user_id = $1`;
-        const result = await pool.query(query, [userId]);
-        
-        gradesData[table.key] = result.rows[0] || {};
-      } else {
-        gradesData[table.key] = {};
-      }
+
+      // Map each sub-aspect to its value
+      aspectsResult.rows.forEach(row => {
+      gradesData[parameterName][row.sub_aspek_nama] = row.sub_aspek_nilai;
+
+      });
     }
 
     res.status(200).json({
@@ -450,12 +302,12 @@ router.get('/grades', authenticateToken, async (req, res) => {
     });
   }
 });
-// Route untuk mengambil nilai akhir user
+
+// Get user's final score
 router.get('/final-grades', authenticateToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // Query untuk mengambil data nilai akhir berdasarkan user_id
     const result = await pool.query(
       `SELECT 
         id, 
@@ -469,7 +321,6 @@ router.get('/final-grades', authenticateToken, async (req, res) => {
       [userId]
     );
     
-    // Jika data tidak ditemukan
     if (result.rows.length === 0) {
       return res.status(404).json({
         message: 'Final score not found for this user',
@@ -480,7 +331,6 @@ router.get('/final-grades', authenticateToken, async (req, res) => {
       });
     }
 
-    // Format data untuk frontend
     const finalScoreData = {
       finalScore: result.rows[0].nilai_akhir,
       predicate: result.rows[0].predikat,
@@ -505,5 +355,181 @@ router.get('/final-grades', authenticateToken, async (req, res) => {
     });
   }
 });
+
+// Additional endpoint to get parameter structure for frontend
+router.get('/grades/structure', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // Get all parameters and their sub-aspects for this user
+    const result = await pool.query(
+      `SELECT 
+        parameter_penilaian_nama,
+        sub_aspek_nama,
+        sub_aspek_nilai
+       FROM penilaian 
+       WHERE user_id = $1 
+       ORDER BY parameter_penilaian_nama, sub_aspek_nama`,
+      [userId]
+    );
+
+    // Group data by parameter to create structure
+    const structure = {};
+    
+    result.rows.forEach(row => {
+      const paramName = row.parameter_penilaian_nama;
+      const aspectName = row.sub_aspek_nama;
+      
+      if (!structure[paramName]) {
+        structure[paramName] = {
+          title: paramName,
+          aspects: []
+        };
+      }
+      
+      if (!structure[paramName].aspects.includes(aspectName)) {
+        structure[paramName].aspects.push(aspectName);
+      }
+    });
+
+    // Convert to array format for frontend
+    const columns = Object.values(structure);
+
+    // If no data found, return default structure
+    if (columns.length === 0) {
+      const defaultColumns = [
+        { title: 'Penguasaan Materi', aspects: ['Sub-aspek 1'] },
+        { title: 'Celah Keamanan', aspects: ['Sub-aspek 1'] },
+        { title: 'Fitur Utama', aspects: ['Sub-aspek 1'] },
+        { title: 'Fitur Pendukung', aspects: ['Sub-aspek 1'] }
+      ];
+
+      return res.status(200).json({
+        message: 'No assessment structure found, returning default',
+        columns: defaultColumns
+      });
+    }
+
+    res.status(200).json({
+      message: 'Assessment structure fetched successfully',
+      columns: columns
+    });
+  } catch (error) {
+    console.error('Error fetching assessment structure:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch assessment structure', 
+      error: error.message 
+    });
+  }
+});
+
+
+// Rename sub-aspect
+router.put('/schema/rename-column', authenticateToken, async (req, res) => {
+  const { categoryTitle, oldAspectName, newAspectName } = req.body;
+  const userId = req.user.id;
+
+  if (!categoryTitle || !oldAspectName || !newAspectName) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE penilaian 
+       SET sub_aspek_nama = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2 AND parameter_penilaian_nama = $3 AND sub_aspek_nama = $4`,
+      [newAspectName, userId, categoryTitle, oldAspectName]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Sub-aspect not found' });
+    }
+
+    res.status(200).json({
+      message: 'Sub-aspect renamed successfully',
+      categoryTitle,
+      oldAspectName,
+      newAspectName
+    });
+  } catch (error) {
+    console.error('Error renaming sub-aspect:', error);
+    res.status(500).json({ 
+      message: 'Failed to rename sub-aspect', 
+      error: error.message 
+    });
+  }
+});
+
+// Delete sub-aspect
+router.delete('/schema/delete-column', authenticateToken, async (req, res) => {
+  const { categoryTitle, aspectName } = req.body;
+  const userId = req.user.id;
+
+  if (!categoryTitle || !aspectName) {
+    return res.status(400).json({ message: 'Category title and aspect name are required' });
+  }
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM penilaian 
+       WHERE user_id = $1 AND parameter_penilaian_nama = $2 AND sub_aspek_nama = $3`,
+      [userId, categoryTitle, aspectName]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Sub-aspect not found' });
+    }
+
+    res.status(200).json({
+      message: 'Sub-aspect deleted successfully',
+      categoryTitle,
+      aspectName
+    });
+  } catch (error) {
+    console.error('Error deleting sub-aspect:', error);
+    res.status(500).json({ 
+      message: 'Failed to delete sub-aspect', 
+      error: error.message 
+    });
+  }
+});
+
+
+
+// DELETE /api/schema/delete-aspect
+router.delete('/schema/delete-aspect', authenticateToken, async (req, res) => {
+const { categoryTitle } = req.body;
+const userId = req.user.id;
+
+if (!categoryTitle) {
+  return res.status(400).json({ message: 'Category title is required' });
+}
+
+try {
+  const result = await pool.query(
+    `DELETE FROM penilaian 
+      WHERE user_id = $1 AND parameter_penilaian_nama = $2`,
+    [userId, categoryTitle]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ message: 'Main aspect not found or already deleted' });
+  }
+
+  res.status(200).json({
+    message: `Main aspect "${categoryTitle}" deleted successfully`,
+    categoryTitle,
+  });
+} catch (error) {
+  console.error('Error deleting main aspect:', error);
+  res.status(500).json({
+    message: 'Failed to delete main aspect',
+    error: error.message,
+  });
+  }
+});
+
+
+
 
 module.exports = router;
